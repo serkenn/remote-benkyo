@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-05-15
+
+### Changed
+
+- **benkyo-tutoring**: added "Graph rendering requests" section — run `benkyo render`
+  once and show the result to the learner immediately; do not silently iterate on
+  visual quality or write custom visualization files before asking the learner.
+  Default scope is `--scope window`; other scopes offered as a follow-up option.
+
 ## [0.4.7] - 2026-05-15
 
 ### Changed

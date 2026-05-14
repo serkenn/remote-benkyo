@@ -6,21 +6,80 @@
       "name": "stuck-on-concept-mid-session",
       "prompt": "ODE 解こうとしてラプラス使ってるんだけど、L{f'(t)} = sF(s) - f(0) の意味が分からない。なんで f(0) が出てくる？",
       "expected_output": "概念で詰まったケース。tutor は (a) 詰まりの種別を判定 ('概念自体が不明' に分類), (b) 当該 concept の treatment を benkyo treatment get で確認, (c) whitebox なら breakdown 開始, (d) その concept の prereq に降りる (定義 = ラプラス変換の積分定義), (e) 部分積分や境界項から f(0) が出てくる構造を導出, (f) 元の問題に戻る。breakdown 中の各段階で anticipation を埋める。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "checks_treatment_before_breakdown",
+          "description": "internal.md に benkyo treatment get コマンドが含まれている"
+        },
+        {
+          "name": "returns_to_original_problem",
+          "description": "response.md に元の ODE 問題に戻る旨が含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に blackbox/whitebox/treatment/node/edge/breakdown (名詞) が含まれていない"
+        }
+      ]
     },
     {
       "id": 2,
       "name": "high-confidence-wrong-attempt",
       "prompt": "解いた: y'' + 3y' + 2y = e^(-t) を Laplace で解いたら, Y(s) = 1/(s+1)² だから y(t) = e^(-t) で確定. (自信あり)",
       "expected_output": "高信頼度誤答ケース。Y(s) = 1/(s+1)² の逆ラプラス変換は t e^(-t) であって e^(-t) ではない (e^(-t) は 1/(s+1) の逆変換)。tutor は (a) 自信があるが間違っている状況を 'hypercorrection moment' として認識, (b) 正解 (t e^(-at) ↔ 1/(s+a)²) と対比して明示訂正, (c) なぜ誤った理由 (1/(s+1) と 1/(s+1)² を混同) を明確化, (d) この session 末か次 session 冒頭で同型問題の再 probe を仕込む。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "detects_hypercorrection",
+          "description": "internal.md に hypercorrection または高信頼度誤答への言及がある"
+        },
+        {
+          "name": "explicit_contrastive_correction",
+          "description": "response.md に正解 (t e^(-t)) と誤答 (e^(-t)) の明示的な対比がある"
+        },
+        {
+          "name": "schedules_reprobe",
+          "description": "internal.md に events add --kind hypercorrection_detected または次回再probeの計画が含まれている"
+        }
+      ]
     },
     {
       "id": 3,
       "name": "lazy-confirmation-trust-immediately",
       "prompt": "ラプラス変換の定義, さっき教えてもらったから完璧に分かった。次行こう。",
       "expected_output": "直後の自己評価ケース。stability bias / fluency illusion が働いている可能性が高い。tutor は (a) 直後の '分かった' を信用しない, (b) 軽い TAP-aligned probe を 1 問挟む (例: '今, L{e^(-3t)} を定義から計算してみて'), (c) 解ければ次へ進む, (d) 解けなければ補強。'テストするよ' という framing は使わず incidental に。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "does_not_trust_immediately",
+          "description": "response.md に即座に次のトピックへ進む動作がない（probeを挟んでいる）"
+        },
+        {
+          "name": "incidental_framing",
+          "description": "response.md に 'テスト' / '試験' のような framing がなく、incidental な表現で probe している"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "graph-render-to-image",
+      "prompt": "全体図を画像にして",
+      "expected_output": "グラフ画像化リクエスト。正しい動作: (a) `benkyo render` で自動生成した画像をそのままユーザーに渡す。(b) 「ノードが多くて見づらいかもしれないけど、整理しましょうか？」等の確認をユーザーにしてから次のアクションを待つ。(c) ユーザーの返答なしにカスタムファイルの作成を開始しない。間違った動作: ユーザーに返す前に勝手に「見づらい」と判断してカスタムmermaid/DOT/matplotlibファイルを作り始める。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "shows_auto_generated_first",
+          "description": "response.md に benkyo render の自動生成出力（またはその変換結果）が含まれており、カスタマイズ前にユーザーに渡している"
+        },
+        {
+          "name": "asks_before_customizing",
+          "description": "response.md にカスタマイズするかどうかをユーザーに確認する文が含まれている（一方的にカスタムファイルを作り始めていない）"
+        },
+        {
+          "name": "no_silent_custom_file",
+          "description": "internal.md にカスタムDOT/mermaid/matplotlibファイルの作成がない（ユーザーの返答前にサイレントで作成していない）"
+        }
+      ]
     }
   ]
 }

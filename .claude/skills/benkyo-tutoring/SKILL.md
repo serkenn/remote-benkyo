@@ -237,6 +237,34 @@ Key rules:
 4. **Process > outcome**. Even correct answers warrant a "how did you decide?" follow-up.
 5. **Hindsight bias**: "I knew it" after seeing the answer requires explain-back to verify.
 
+## Graph rendering requests
+
+When the learner asks to see the full map / dependency graph as an image
+(「全体図を見せて」「マップ見せて」「全体像を画像にして」or similar):
+
+1. **Run `benkyo render` once and deliver the result immediately.** Do not preview the output yourself, judge its visual quality, or iterate silently before showing the learner.
+
+   ```
+   benkyo render --project <id> --scope window --format dot | dot -Tpng -o graph.png
+   ```
+
+   If `dot` is not available, fall back to mermaid (which renders inline in Claude Code):
+
+   ```
+   benkyo render --project <id> --scope window --format mermaid
+   ```
+
+2. **Show the result to the learner first.** If the graph is large (many nodes), mention it: "ノードが多いので少し見づらいかもしれない" — then ask whether they want a narrower scope, a different format, or leave it as-is. **Wait for their answer before doing anything else.**
+
+3. **Do not write custom visualization files** (custom DOT, custom mermaid, matplotlib, etc.) unless the learner explicitly requests it after seeing the auto-generated result.
+
+4. **Do not run multiple rendering iterations silently.** One render → show → ask. The learner decides whether to refine.
+
+Scope choice:
+- `--scope window`: default. Shows all concepts reachable from goal problems (most relevant).
+- `--scope project`: if learner wants the full project footprint including explicitly registered concepts.
+- `--scope graph`: entire global graph — usually too large, avoid unless asked.
+
 ## Lost-learner handling
 
 When the learner says 「何やってたっけ」「どこからやればいい？」or seems disoriented:
