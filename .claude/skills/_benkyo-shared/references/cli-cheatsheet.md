@@ -79,6 +79,71 @@ benkyo render --project <id> --format <mermaid|dot> [--output <path>]
 - Without `--output`: raw text on stdout (pipe-friendly: `... --format dot | dot -Tpng > graph.png`).
 - Shape conventions: problem = stadium, conceptual = rectangle, procedural = cylinder.
 
+## Events (append-only log of state changes)
+
+The events table is the queryable history. Skills write to it on state changes,
+and read from it for cross-session reasoning (delayed JOL verification,
+hypercorrection re-probing, mastery tracking).
+
+```
+benkyo events add --kind <kind> [--project <id>] [--payload <json>] [--payload-file <path>] [--notes <text>]
+benkyo events get <event_id>
+benkyo events list [--project <id>] [--kind <kind>] [--since <iso>] [--until <iso>] [--limit <n>]
+benkyo events delete <event_id>               # correction-only; the log is append-only by convention
+```
+
+Known kinds (the column is not CHECK-constrained, but stick to these unless
+you have a specific reason to invent a new one):
+
+| kind | typical payload |
+|---|---|
+| `session_start` | `{}` (use `--notes` for context like "1 week gap") |
+| `session_end` | `{completed_problems, treatment_changes, pending}` |
+| `delayed_jol_recorded` | `{concept_id, claim: "high"|"mid"|"low"}` |
+| `hypercorrection_detected` | `{concept_id, problem_id, learner_confidence}` |
+| `treatment_changed` | `{concept_id, from, to}` |
+| `concept_probed` | `{concept_id, problem_id, correct: bool}` |
+
+The `notes` column is free text — use it to capture LLM-flexibility context
+that doesn't fit the payload schema ("学習者は明日試験", "風邪気味と発話", etc.).
+
+## Sessions (high-level atomic operations)
+
+Use these instead of composing `events add` sequences yourself. They wrap
+multiple primitive writes in a single transaction.
+
+```
+benkyo session end --project <id> --summary-file <path>      # or --summary <json>
+```
+
+Summary JSON shape (all keys optional):
+
+```json
+{
+  "completed_problems": ["p1", "p3"],
+  "treatment_changes": [{"concept_id": "c5", "from": "procedural", "to": "conceptual"}],
+  "pending": ["c4 mid-derivation"],
+  "delayed_jols": [
+    {"concept_id": "c1", "claim": "high"},
+    {"concept_id": "c2", "claim": "mid", "note": "怪しい"}
+  ],
+  "notes": "学習者は明日試験"
+}
+```
+
+Writes one `session_end` event plus one `delayed_jol_recorded` event per entry
+in `delayed_jols`. Each JOL entry's optional `note` becomes the event's
+`notes` column. All-or-nothing transactionally.
+
+## Schema (runtime introspection)
+
+```
+benkyo schema                # JSON tree of every command, subcommand, option, argument
+```
+
+Use this to verify the installed CLI matches what your cheatsheet expects, or
+to discover available commands without parsing `--help` text.
+
 ## Export / Import
 
 ```

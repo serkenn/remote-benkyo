@@ -1,11 +1,13 @@
 """Data access layer: CRUD operations for every entity."""
 
+import json
 import sqlite3
 from typing import Any
 
 from benkyo.errors import ConflictError, InvalidArgError, NotFoundError
 from benkyo.ids import (
     CONCEPT_PREFIX,
+    EVENT_PREFIX,
     PROBLEM_PREFIX,
     PROJECT_PREFIX,
     next_id,
@@ -15,6 +17,19 @@ from benkyo.ids import (
 VALID_EDGE_TYPES = ("prereq", "related")
 VALID_TREATMENTS = ("procedural", "conceptual")
 VALID_SET_BY = ("system", "learner", "material")
+
+# Known event kinds. The column is intentionally not CHECK-constrained so that
+# the skill layer can introduce new kinds without a schema migration. This list
+# documents the MVP set and the payload shape each kind expects. Treat it as
+# convention, not enforcement.
+KNOWN_EVENT_KINDS = (
+    "session_start",
+    "session_end",
+    "delayed_jol_recorded",
+    "hypercorrection_detected",
+    "treatment_changed",
+    "concept_probed",
+)
 
 
 def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
@@ -425,6 +440,189 @@ def list_projects(conn: sqlite3.Connection) -> list[dict[str, Any]]:
         ]
         result.append(d)
     return result
+
+
+# =======================================================================
+# Events (append-only log)
+# =======================================================================
+
+
+def _row_to_event(row: sqlite3.Row) -> dict[str, Any]:
+    d = dict(row)
+    try:
+        d["payload"] = json.loads(d.pop("payload_json"))
+    except (json.JSONDecodeError, TypeError):
+        d["payload"] = {}
+    return d
+
+
+def create_event(
+    conn: sqlite3.Connection,
+    kind: str,
+    payload: dict[str, Any] | None = None,
+    project_id: str | None = None,
+    notes: str = "",
+) -> dict[str, Any]:
+    """Append an event to the log.
+
+    `kind` is not constrained at the DB level; KNOWN_EVENT_KINDS is a
+    documentation convention only. Skills may introduce new kinds as needed.
+    """
+    kind = (kind or "").strip()
+    if not kind:
+        raise InvalidArgError("kind must not be empty")
+    if project_id is not None:
+        if not project_id.startswith(PROJECT_PREFIX):
+            raise InvalidArgError(f"project_id must be a project id: {project_id!r}")
+        if conn.execute(
+            "SELECT 1 FROM projects WHERE id = ?", (project_id,)
+        ).fetchone() is None:
+            raise NotFoundError(f"project not found: {project_id}")
+    payload = payload or {}
+    if not isinstance(payload, dict):
+        raise InvalidArgError("payload must be a dict (will be stored as JSON)")
+    payload_json = json.dumps(payload, ensure_ascii=False)
+
+    new_id = next_id(conn, EVENT_PREFIX)
+    conn.execute(
+        "INSERT INTO events (id, project_id, kind, payload_json, notes) VALUES (?, ?, ?, ?, ?)",
+        (new_id, project_id, kind, payload_json, notes or ""),
+    )
+    return get_event(conn, new_id)
+
+
+def get_event(conn: sqlite3.Connection, event_id: str) -> dict[str, Any]:
+    row = conn.execute(
+        "SELECT * FROM events WHERE id = ?", (event_id,)
+    ).fetchone()
+    if row is None:
+        raise NotFoundError(f"event not found: {event_id}")
+    return _row_to_event(row)
+
+
+def list_events(
+    conn: sqlite3.Connection,
+    project_id: str | None = None,
+    kind: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """List events, newest first.
+
+    Args:
+        project_id: filter by project (None = all events including global)
+        kind: filter by exact kind match
+        since: ISO 8601 timestamp inclusive lower bound (e.g. '2026-05-14')
+        until: ISO 8601 timestamp inclusive upper bound
+        limit: max rows returned
+    """
+    sql = "SELECT * FROM events WHERE 1=1"
+    params: list[Any] = []
+    if project_id is not None:
+        sql += " AND project_id = ?"
+        params.append(project_id)
+    if kind is not None:
+        sql += " AND kind = ?"
+        params.append(kind)
+    if since is not None:
+        sql += " AND ts >= ?"
+        params.append(since)
+    if until is not None:
+        sql += " AND ts <= ?"
+        params.append(until)
+    sql += " ORDER BY ts DESC, id DESC"
+    if limit is not None:
+        if limit <= 0:
+            raise InvalidArgError("limit must be positive")
+        sql += " LIMIT ?"
+        params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    return [_row_to_event(r) for r in rows]
+
+
+def delete_event(conn: sqlite3.Connection, event_id: str) -> dict[str, Any]:
+    """Delete an event by id. Provided for correction of mis-logged entries;
+    the log is append-only by convention, not by enforcement."""
+    if conn.execute(
+        "SELECT 1 FROM events WHERE id = ?", (event_id,)
+    ).fetchone() is None:
+        raise NotFoundError(f"event not found: {event_id}")
+    conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
+    return {"deleted_id": event_id}
+
+
+def record_session_end(
+    conn: sqlite3.Connection,
+    project_id: str,
+    summary: dict[str, Any],
+) -> dict[str, Any]:
+    """Atomically record a session end: one session_end event plus one
+    delayed_jol_recorded event per item in summary['delayed_jols'].
+
+    `summary` shape (all keys optional except where noted):
+        {
+          "completed_problems": [problem_id, ...],
+          "treatment_changes": [{"concept_id": str, "from": str, "to": str}, ...],
+          "pending": [str, ...],
+          "delayed_jols": [{"concept_id": str, "claim": str, "note": str?}, ...],
+          "notes": str
+        }
+
+    Returns the session_end event plus the list of jol event ids written.
+    """
+    if not project_id or not project_id.startswith(PROJECT_PREFIX):
+        raise InvalidArgError(f"project_id must be a project id: {project_id!r}")
+    if conn.execute(
+        "SELECT 1 FROM projects WHERE id = ?", (project_id,)
+    ).fetchone() is None:
+        raise NotFoundError(f"project not found: {project_id}")
+    if not isinstance(summary, dict):
+        raise InvalidArgError("summary must be a dict")
+
+    jol_seeds = summary.get("delayed_jols", []) or []
+    if not isinstance(jol_seeds, list):
+        raise InvalidArgError("summary['delayed_jols'] must be a list")
+
+    # session_end payload excludes the jol list (those become separate events
+    # for queryability — list_events --kind delayed_jol_recorded works).
+    session_payload = {k: v for k, v in summary.items() if k != "delayed_jols"}
+    session_notes = session_payload.pop("notes", "") or ""
+
+    # All inserts in a single transaction.
+    conn.execute("BEGIN")
+    try:
+        session_event = create_event(
+            conn,
+            kind="session_end",
+            project_id=project_id,
+            payload=session_payload,
+            notes=session_notes,
+        )
+        jol_events = []
+        for seed in jol_seeds:
+            if not isinstance(seed, dict):
+                raise InvalidArgError(
+                    "each delayed_jols entry must be a dict"
+                )
+            jol_note = seed.pop("note", "") or ""
+            jol_event = create_event(
+                conn,
+                kind="delayed_jol_recorded",
+                project_id=project_id,
+                payload=seed,
+                notes=jol_note,
+            )
+            jol_events.append(jol_event)
+        conn.execute("COMMIT")
+    except Exception:
+        conn.execute("ROLLBACK")
+        raise
+
+    return {
+        "session_end": session_event,
+        "delayed_jols": jol_events,
+    }
 
 
 # =======================================================================

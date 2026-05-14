@@ -5,6 +5,7 @@ import sqlite3
 CONCEPT_PREFIX = "c"
 PROBLEM_PREFIX = "p"
 PROJECT_PREFIX = "prj"
+EVENT_PREFIX = "e"
 
 
 def next_id(conn: sqlite3.Connection, prefix: str) -> str:
@@ -37,7 +38,7 @@ def next_id(conn: sqlite3.Connection, prefix: str) -> str:
 
 def parse_id(value: str) -> tuple[str, int]:
     """Split an id into its prefix and numeric part. Raises ValueError on malformed input."""
-    for prefix in (PROJECT_PREFIX, CONCEPT_PREFIX, PROBLEM_PREFIX):
+    for prefix in (PROJECT_PREFIX, CONCEPT_PREFIX, PROBLEM_PREFIX, EVENT_PREFIX):
         if value.startswith(prefix):
             rest = value[len(prefix):]
             if rest.isdigit():

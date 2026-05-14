@@ -56,11 +56,23 @@ CREATE TABLE IF NOT EXISTS project_concepts (
     FOREIGN KEY (concept_id) REFERENCES concept_nodes(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS events (
+    id TEXT PRIMARY KEY,
+    ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    project_id TEXT,
+    kind TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    notes TEXT NOT NULL DEFAULT '',
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id);
 CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id);
 CREATE INDEX IF NOT EXISTS idx_edges_type ON edges(edge_type);
 CREATE INDEX IF NOT EXISTS idx_project_concepts_concept ON project_concepts(concept_id);
 CREATE INDEX IF NOT EXISTS idx_project_goals_problem ON project_goals(problem_id);
+CREATE INDEX IF NOT EXISTS idx_events_project_kind ON events(project_id, kind);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 
 CREATE TABLE IF NOT EXISTS id_counters (
     prefix TEXT PRIMARY KEY,
@@ -76,6 +88,7 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.executescript(SCHEMA)
     return conn
 

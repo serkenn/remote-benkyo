@@ -1,0 +1,185 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.2.0] - 2026-05-14
+
+Adds a queryable events log so the skills' research-grounded claims —
+delayed-JOL verification, hypercorrection re-probing, stability-bias
+detection — become realizable across sessions, not just within one. The
+session-wrap protocol moves from free-text metadata to structured event
+records via a single atomic command.
+
+### Added
+
+- **`events` table** (append-only) with `id` (`e<n>`), `ts`, `project_id`,
+  `kind`, `payload_json`, `notes`. The `kind` column is intentionally not
+  CHECK-constrained; the MVP set (`session_start`, `session_end`,
+  `delayed_jol_recorded`, `hypercorrection_detected`, `treatment_changed`,
+  `concept_probed`) is convention, not enforcement. The `notes` column is the
+  LLM-flexibility escape hatch for context that doesn't fit a payload schema.
+- **`benkyo events`** subcommand (`add`, `get`, `list`, `delete`) with
+  `--project`, `--kind`, `--since`, `--until`, `--limit` filters on `list`.
+- **`benkyo session end`** — single atomic command that writes one
+  `session_end` event plus one `delayed_jol_recorded` event per entry in the
+  summary's `delayed_jols` list. All-or-nothing transactionally. Skills use
+  this instead of composing `events add` sequences themselves.
+- **`benkyo schema`** — JSON tree of every command, subcommand, option, and
+  argument. Skills can introspect the live CLI surface at runtime instead of
+  relying on hand-maintained cheat sheets staying in sync.
+- `PRAGMA busy_timeout = 5000` on every connection.
+- 6 new MVP event kinds documented in `repository.KNOWN_EVENT_KINDS`.
+- 45 new tests (`tests/test_events.py`, `tests/test_session_end.py`,
+  `tests/test_cli/test_events.py`, `tests/test_cli/test_session.py`).
+
+### Changed
+
+- **`benkyo-session-wrap` SKILL.md step 4** rewritten from "append a session
+  note to `project.metadata` (free text)" to "persist via
+  `benkyo session end --summary-file`". The protocol no longer touches
+  `project.metadata` at session boundaries.
+- **`benkyo-project-init` SKILL.md "Returning after a long gap"** rewritten to
+  recover state from `benkyo events list --kind session_end` and
+  `--kind delayed_jol_recorded`, with the explicit "events as prior, never
+  as conclusion" rule (foresight bias applies symmetrically to skills reading
+  their own past records).
+- **`benkyo-tutoring` SKILL.md session-start** now queries
+  `delayed_jol_recorded` events for the verification protocol.
+  Hypercorrection moments are recorded as `hypercorrection_detected` events
+  for cross-session re-probing (in addition to in-session contrastive
+  correction).
+- **`benkyo-treatment-shift` SKILL.md** commit/release protocols both now
+  log a `treatment_changed` event with `{concept_id, from, to}` payload.
+- Cardinal vocabulary rule extended in all 5 SKILL.md files: `event`, `log`,
+  `record`, `schema`, `JSON`, `metadata`, `session_end`, `delayed_jol`,
+  `hypercorrection`, `payload`, `kind` added to the forbidden internal-terms
+  list. Internal IDs (`c<n>` / `p<n>` / `prj<n>` / `e<n`) explicitly forbidden
+  in learner-facing text.
+- `_benkyo-shared/references/cli-cheatsheet.md` — new sections for Events,
+  Sessions (high-level atomic), and Schema (runtime introspection).
+- `_benkyo-shared/references/nl-to-cli.md` — new section H ("Session
+  boundaries and history") mapping learner phrases to event reads/writes,
+  with explicit translations of internal event operations. Added a third
+  cardinal rule: **events inform expectations, never replace evidence**.
+- `_benkyo-shared/references/session-boundaries.md` — rewritten end-to-end to
+  use events as the persistence layer. The "What to do without ③ (event log)"
+  workaround section removed.
+- `_benkyo-shared/references/self-eval-handling.md` — delayed JOL recording
+  switched from free-text metadata to the `benkyo session end` summary;
+  hypercorrection moments produce `hypercorrection_detected` events.
+- README reorganized: "Get started" 3-step flow moved to the top so first-time
+  readers see install → drop materials → talk before the why/how detail. Added
+  a "See the map" subsection so users can discover `benkyo render` for graph
+  visualization. Tagline rewritten.
+- All 18 single-turn skill evaluations re-run against the v0.2.0 skills —
+  no regression observed, and new protocols (events writing, session end
+  atomic, defer-to-project-init for resume) function as designed.
+
+### Fixed
+
+- **Citation precision pass**. All quantitative claims re-checked against
+  primary sources. Corrections:
+  - **Rhodes & Tauber (2011)**: 0.93 is the meta-analytic Hedges's *g* for
+    delayed-vs-immediate JOL accuracy, not a gamma correlation value. Symbol
+    "γ = 0.93" was incorrect across 8 places (README + 4 skill / reference
+    files); all now read "Hedges's *g* = 0.93".
+  - **Sinha & Kapur (2021) "β = 0.27–0.28 for instruction building"**: the
+    β coefficients of 0.27 and 0.28 actually belong to *multiple-RSM
+    generation* and *group work*; "instruction building on student solutions"
+    has a near-zero regression β once correlated predictors are controlled.
+    Replaced with the cleaner subgroup contrast: PS-I with instruction-building
+    *g* = 0.56 vs without *g* = 0.20 (Table 3, subgroup *p* = .02).
+  - **"g = 0.36–0.87" range form**: 0.36 is the main meta-analytic estimate
+    [95% CI 0.20, 0.51], 0.87 is a p-curve-based alternative from a different
+    estimator. They are not the bounds of an interval. Egger's test and
+    trim-and-fill detected no funnel-plot asymmetry. The range form has been
+    removed; the two estimates are now reported separately with their methods.
+  - **Kalyuga (2007) "r = 0.92 with full tests, 4.9x time reduction"**: the
+    primary source says "correlations *up to* .92" and "time reductions *up
+    to* 4.9". The "up to" qualifier has been restored.
+  - **Bertsch et al. (2007) "Lists > 50: effect disappears"**: the actual
+    moderator estimate is *d* = 0.09, 95% CI [0.07, 0.11] — small but still
+    significantly positive. Updated to "shrinks to *d* = 0.09".
+  - **decision-tables.md** Bertsch / Sinha-&-Kapur entries refactored to use
+    the corrected numbers and to make the I-PS/PS-I logic explicit.
+
+### Scope decision
+
+**Probabilistic learner modeling (BKT, DKT, etc.) is explicitly out of scope
+for benkyo.** benkyo provides structured memory and a behavioral playbook; it
+does not compute `P(mastered)`. Skills query the events log with simple
+heuristics. If you want a probabilistic model or a forgetting-curve scheduler
+(FSRS-style), build it as a separate layer on top of the events log — that
+is the right boundary.
+
+## [0.1.1] - 2026-05-14
+
+First public release. CLI + 5 Claude Code skills, plugin marketplace manifest,
+README with research-foundation citations, MIT license.
+
+### Added
+
+- 5 Claude Code skills under `.claude/skills/` (`benkyo-project-init`,
+  `benkyo-tutoring`, `benkyo-treatment-shift`, `benkyo-graph-edit`,
+  `benkyo-session-wrap`), each with `SKILL.md`, `evals/evals.json`, and
+  `evals/trigger-eval.json`.
+- Shared reference library at `.claude/skills/_benkyo-shared/references/`
+  (CLI cheatsheet, natural-language ↔ internal vocab map, decision tables,
+  granularity guide, lost-learner handling, self-eval handling, session
+  boundaries, literature pointers).
+- `.claude-plugin/marketplace.json` so the skills can be installed via
+  `/plugin marketplace add youseiushida/benkyo`.
+- README with installation, quick start, architecture overview, research
+  foundation table, and APA-formatted references for the 9 cited papers.
+- `concept merge`, `concept fork`, `problem merge` commands and underlying
+  repository operations, with conflict resolution flags.
+- Regression tests for Japanese content handling on Windows (`tests/test_encoding.py`).
+- Cardinal vocabulary rule extension: internal IDs (`c1`, `p1`, `prj1`)
+  explicitly forbidden in learner-facing text.
+- Session-wrap skill: "defer to project-init" shortcut for resume scenarios
+  ("久しぶり" / "ようやく続き始めるかー" / "何やってたっけ").
+- pyproject.toml metadata: classifiers, keywords, project URLs.
+
+### Changed
+
+- CLI surface and treatment values fully converted to English
+  (`procedural` / `conceptual` values; `prereq` / `related` edge types; all
+  command help text). Internal terms remain English; the cardinal-vocabulary
+  rule in the skills translates them to natural Japanese for the learner.
+- Forced UTF-8 stdout/stderr in `cli.py` to handle Windows cp932 encoding
+  failures when CLI output contains Japanese characters.
+
+### Fixed
+
+- `benkyo treatment-shift/evals/evals.json` eval-3 expected_output: "収束級数"
+  (series convergence) corrected to "広義積分の収束判定" (improper-integral
+  convergence test), which is what `c1`'s content actually requires.
+
+## [0.1.0] - 2026-05-14
+
+Initial private release of the CLI core.
+
+### Added
+
+- SQLite-backed schema: `concept_nodes`, `problem_nodes`, `edges`,
+  `projects`, `project_goals`, `project_concepts`, `id_counters`.
+- ID convention: `c<n>` for concepts, `p<n>` for problems, `prj<n>` for
+  projects.
+- Commands: `concept`, `problem`, `edge`, `project`, `treatment`, `breakdown`,
+  `window`, `frontier`, `ancestors`, `render`, `import`, `export`, `info`.
+- Per-`(project, concept)` procedural/conceptual treatment with default
+  fallback to `conceptual` when unset.
+- Window traversal: BFS from goal problems via prereq edges, with procedural
+  concepts terminating descent.
+- `--db` flag and `BENKYO_DB` environment variable for DB path override.
+- platformdirs-based default DB location (OS-appropriate app data dir).
+
+[Unreleased]: https://github.com/youseiushida/benkyo/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/youseiushida/benkyo/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/youseiushida/benkyo/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/youseiushida/benkyo/releases/tag/v0.1.0

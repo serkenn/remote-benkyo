@@ -11,7 +11,7 @@ This skill handles the project-creation phase: extracting a concrete goal from t
 
 Never use these internal terms in any learner-facing utterance — including technical recaps, "here's what I made" summaries, status displays:
 
-> procedural, conceptual, treatment, cut, prereq, related, node, edge, traversal, window, breakdown, commit, release, project, graph
+> procedural, conceptual, treatment, cut, prereq, related, node, edge, traversal, window, breakdown, commit, release, project, graph, event, log, record, schema, JSON, metadata, session_end, delayed_jol
 
 Acceptable equivalents are in `../_benkyo-shared/references/nl-to-cli.md`. Common translations:
 
@@ -211,19 +211,23 @@ This first problem doubles as a more thorough diagnostic and establishes the PS-
 If a project exists but it's been weeks since the learner touched it:
 
 1. **Acknowledge the gap softly** without moralizing.
-2. **Re-show the state**: what was done, what's pending.
-3. **Aggressive delayed JOL**: probe many of the previously-claimed-known concepts. Expect more stability bias caught than usual.
-4. **Adjust treatments based on probe results**: if many "high confidence" claims have decayed, those concepts may need to go back to conceptual (commit) for re-strengthening.
+2. **Re-show the state**: `benkyo window --project <id>` for the graph; `benkyo events list --project <id> --kind session_end --limit 1` for the last session's `pending` + `notes`.
+3. **Recover the previous self-classification**: `benkyo events list --project <id> --kind delayed_jol_recorded --limit 20` returns the seeds. Highest-confidence claims first.
+4. **Aggressive delayed JOL verification**: probe many of the previously-claimed-known concepts. Stability bias (Bjork et al. 2013) accumulates over weeks; expect more retrieval failures than the learner predicts.
+5. **Adjust treatments based on probe results**: if "high confidence" claims have decayed, those concepts may need to go back to conceptual (commit) for re-strengthening.
 
 ```
-Tutor: 久しぶり。前回末で 「ラプラス変換は自信あり、留数は自信なし」って言ってたよね。
-  軽く確認させて。ラプラス変換: [simple probe]
+Tutor: 久しぶり。前回末で「ラプラス変換は自信あり、留数は自信なし」って言ってたよね。
+  軽く確認させて。ラプラス変換: [simple probe drawn from the JOL records]
 
 学習者: ...あれ、忘れてる
 
-Tutor: OK、stability bias の典型例だから気にしないで。ラプラス変換も
-  少し補強してから進めよう。
+Tutor: OK、よくあること。ラプラス変換も少し補強してから進めよう。
 ```
+
+### Events-as-prior rule
+
+Past JOL claims are *priors* for the order and aggressiveness of probing. They are never *conclusions*: a "high" claim from 2 weeks ago does NOT mean the learner currently remembers — it means "probe this lightly first." Probe results always override claims. The Rhodes & Tauber (2011) meta-analytic *g* = 0.93 (delayed-over-immediate JOL accuracy) is pooled across primarily short delays (mostly ~24 hours in the source studies); week-plus delays are uncharted territory. Treat older claims with more skepticism.
 
 ## What this skill does NOT do
 

@@ -11,7 +11,7 @@ The decision when to shift is part of this skill. The actual ongoing teaching is
 
 ## Cardinal vocabulary rule
 
-Internal terms (procedural, conceptual, treatment, cut, commit, release, prereq, node, edge, graph) are NEVER spoken to the learner. Translate:
+Internal terms (procedural, conceptual, treatment, cut, commit, release, prereq, node, edge, graph, event, log, record, schema, JSON, metadata, treatment_changed) are NEVER spoken to the learner. Translate:
 
 - commit / 「上に上げる」 → 「ここを掘り下げる」「ちゃんと理解する」
 - release / 「下に降ろす」 → 「公式で済ます」「ツールとして使う」「飛ばす」
@@ -80,8 +80,15 @@ Goal: open up the concept for full understanding (breakdown becomes traversable 
    # or equivalently:
    # benkyo treatment set --project prj1 --concept c5 --treatment conceptual
    ```
-7. **Notify the learner briefly** if new prereqs were added: "進めながら『定積分』と『複素指数関数』に触れる場面が出てくるけど、それぞれは公式が使えれば一旦 OK にして、必要ならそこも掘る感じで進めるね。"
-8. **Begin teaching loop** (defer to `benkyo-tutoring`).
+7. **Log the change as an event** so future sessions can see it:
+   ```
+   benkyo events add --kind treatment_changed \
+     --project prj1 \
+     --payload '{"concept_id": "c5", "from": "procedural", "to": "conceptual"}' \
+     --notes "<why the learner asked or what triggered the shift>"
+   ```
+8. **Notify the learner briefly** if new prereqs were added: "進めながら『定積分』と『複素指数関数』に触れる場面が出てくるけど、それぞれは公式が使えれば一旦 OK にして、必要ならそこも掘る感じで進めるね。"
+9. **Begin teaching loop** (defer to `benkyo-tutoring`).
 
 ### Don't
 
@@ -109,8 +116,15 @@ Goal: close off the concept; just use the reference.
    # benkyo treatment set --project prj1 --concept c5 \
    #   --treatment procedural --reference "<content>"
    ```
-4. **Acknowledge the trade-off**: "じゃあこの公式を使う形で進めるね。気が向いたら戻ってきてもいい。"
-5. **Continue toward the original goal** (defer to `benkyo-tutoring`).
+4. **Log the change as an event**:
+   ```
+   benkyo events add --kind treatment_changed \
+     --project prj1 \
+     --payload '{"concept_id": "c5", "from": "conceptual", "to": "procedural"}' \
+     --notes "<the fatigue/transfer-failure signal that triggered the release>"
+   ```
+5. **Acknowledge the trade-off**: "じゃあこの公式を使う形で進めるね。気が向いたら戻ってきてもいい。"
+6. **Continue toward the original goal** (defer to `benkyo-tutoring`).
 
 ### Don't
 

@@ -55,13 +55,13 @@ For each session segment:
 
 | Situation | Mode | Reason |
 |---|---|---|
-| Conceptual node, prereqs ready, novel target | **PS-I** | core PF setup; Sinha & Kapur g=0.36-0.87 |
+| Conceptual node, prereqs ready, novel target | **PS-I** | core PF setup; Sinha & Kapur *g* = 0.36 [0.20, 0.51] |
 | Procedural node | **I-PS** | provide reference, then practice (Adesope) |
 | Learner is true novice (no relevant prereqs) | **I-PS** | Sinha & Kapur: low-graders showed reverse effect; scaffold needed |
 | Time pressure | **I-PS** | PF needs delay for retention benefit |
 | Learner explicitly requests direct teaching | **I-PS** | respect intent; offer PS-I later |
-| Domain-general skill | **I-PS** | Sinha & Kapur g=-0.17 for domain-general |
-| Calculation/manipulation skill | **I-PS + faded examples** | Bertsch d=0.92 for calculation in generation effect |
+| Domain-general skill | **I-PS** | Sinha & Kapur *g* = -0.17 for domain-general |
+| Calculation/manipulation skill | **I-PS + faded examples** | Bertsch 2007 shows calculation has the largest generation-effect benefit (d = 0.92), so attempt-first remains worthwhile even when sequenced as I-PS |
 
 ## Commit / release decision
 
@@ -102,7 +102,7 @@ For each session segment:
 |---|---|---|
 | Immediately after explanation | LOW | brief verification probe, TAP-aligned |
 | Just after solving a problem | MEDIUM | one isomorphic variation problem |
-| At start of next session, days later | HIGH (Rhodes & Tauber g=0.93) | one quick probe; mostly trust |
+| At start of next session, days later | HIGH (Rhodes & Tauber 2011, delayed-over-immediate *g* = 0.93) | one quick probe; mostly trust |
 | "Ah, I knew that all along" (hindsight) | LOW | require explain-back |
 
 ## "I don't know where to start" handling

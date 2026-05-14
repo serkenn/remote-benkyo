@@ -11,7 +11,7 @@ This skill governs how to tutor a learner who is actively learning within a benk
 
 The learner does NOT know these internal terms. Never use them in any learner-facing utterance — including technical summaries, status displays, "here's what I did" recaps, JSON-like prose, or aside notes:
 
-> procedural, conceptual, treatment, cut, prereq, related, node, edge, traversal, window, breakdown (as a noun like "the breakdown"), commit, release, project, graph, treatment-shift, frontier, ancestors
+> procedural, conceptual, treatment, cut, prereq, related, node, edge, traversal, window, breakdown (as a noun like "the breakdown"), commit, release, project, graph, treatment-shift, frontier, ancestors, event, log, record (as a verb describing what you internally do), schema, JSON, metadata, session_end, delayed_jol, hypercorrection
 
 If you find yourself wanting to say "プロジェクト作成完了" or "concept c5 を procedural にした" or "let me show you the breakdown of this node", STOP. Translate.
 
@@ -57,11 +57,18 @@ Internal reasoning (CLI choice, treatment status, breakdown stack) stays interna
 When the learner returns to an existing project (or you're being engaged for the first time within an existing benkyo session):
 
 1. **Confirm context**: `benkyo project list`; identify active project.
-2. **Show current state**: `benkyo window --project <id>`; read project.metadata for the most recent session note.
-3. **Delayed JOL verification**: if the previous session's metadata noted concepts the learner claimed to remember, probe those now with one TAP-aligned problem each. Highest-confidence claims first. **Do not frame as a test** — say "ちょっと確認" or "おさらいから".
-4. **Propose focus**: based on window + metadata, offer 1-3 specific next steps with reasons. Let learner choose.
+2. **Show current state**: `benkyo window --project <id>`.
+3. **Recover what the learner claimed to remember**: `benkyo events list --project <id> --kind delayed_jol_recorded --limit 10`. These are the seeds from the previous session-wrap.
+4. **Recover the previous session's pending items + notes**: `benkyo events list --project <id> --kind session_end --limit 1`. The `pending` field and the `notes` column tell you where to resume.
+5. **Delayed JOL verification**: probe the items from step 3 with one TAP-aligned problem each, highest-confidence claims first. **Do not frame as a test** — say "ちょっと確認" or "おさらいから". Trust delayed JOL (Rhodes & Tauber 2011, delayed-vs-immediate Hedges's *g* = 0.93) but verify — see "events as prior, never as conclusion" below.
+6. **Propose focus**: based on window + recovered context, offer 1-3 specific next steps with reasons. Let learner choose.
+7. **Record session start**: `benkyo events add --kind session_start --project <id> --notes "<gap-length / context>"` — minimal, just for the interval calculation in future sessions.
 
 Detail: see `../_benkyo-shared/references/session-boundaries.md`.
+
+### Events as prior, never as conclusion
+
+The events log informs *what to probe and how aggressively*, not *what the learner currently knows*. A past `delayed_jol_recorded` with `claim: "high"` for a concept does NOT license skipping it; it licenses probing it *first and lightly*. If the probe fails, the prior was wrong — re-test before continuing. Foresight bias (Bjork et al. 2013) applies symmetrically to skills reading their own past records. **Probe results always override claims.**
 
 ## During the session: choose mode
 
@@ -82,7 +89,7 @@ Reference: see `../_benkyo-shared/references/decision-tables.md` and `../_benkyo
 
 ## PS-I execution
 
-When conducting PS-I, these 5 elements must all be present (Sinha & Kapur identifies "instruction building on student solutions" as the strongest predictor, β = 0.27-0.28):
+When conducting PS-I, these 5 elements must all be present. Sinha & Kapur (2021) identifies **"instruction building on student solutions"** as a key fidelity factor: PS-I sessions *with* this feature show *g* = 0.56 vs *g* = 0.20 *without* (Table 3, subgroup *p* = .02). (By Pearson importance this predictor ranks at the top, but its regression β collapses near zero once other correlated predictors are controlled — the cleaner number is the subgroup contrast.)
 
 ### 1. Brief anticipation
 
@@ -216,8 +223,17 @@ The learner's self-evaluation is unreliable in the short term, accurate in the l
 Key rules:
 
 1. **Don't trust "分かった" immediately**. Verify with a brief TAP-aligned probe.
-2. **Trust "分かった" at the next session start** (delayed JOL, Rhodes & Tauber g=0.93). One probe suffices.
-3. **High-confidence + wrong = hypercorrection moment**. Explicit contrasting correction; re-probe later in session.
+2. **Trust "分かった" at the next session start** (delayed JOL; Rhodes & Tauber 2011 report Hedges's *g* = 0.93 for the delayed-over-immediate JOL accuracy comparison). One probe suffices.
+3. **High-confidence + wrong = hypercorrection moment**. Explicit contrasting correction; re-probe later in session. Also write the event for cross-session re-probing:
+
+   ```
+   benkyo events add --kind hypercorrection_detected \
+     --project <id> \
+     --payload '{"concept_id": "<id>", "problem_id": "<id>", "learner_confidence": "high"}' \
+     --notes "<what the learner said + canonical answer + the divergence>"
+   ```
+
+   This is internal only — the learner hears Butterfield-style contrastive correction in natural language.
 4. **Process > outcome**. Even correct answers warrant a "how did you decide?" follow-up.
 5. **Hindsight bias**: "I knew it" after seeing the answer requires explain-back to verify.
 

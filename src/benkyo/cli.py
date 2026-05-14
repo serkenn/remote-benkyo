@@ -30,11 +30,14 @@ def _force_utf8_io() -> None:
             pass
 from benkyo.commands.concept import concept_group
 from benkyo.commands.edge import edge_group
+from benkyo.commands.events import events_group
 from benkyo.commands.info import info_cmd
 from benkyo.commands.io_cmds import register as register_io
 from benkyo.commands.problem import problem_group
 from benkyo.commands.project import project_group
 from benkyo.commands.render import render_cmd
+from benkyo.commands.schema import register as register_schema
+from benkyo.commands.session import session_group
 from benkyo.commands.traversal_cmds import register as register_traversal
 from benkyo.commands.treatment import treatment_group
 
@@ -64,10 +67,13 @@ cli.add_command(problem_group)
 cli.add_command(edge_group)
 cli.add_command(project_group)
 cli.add_command(treatment_group)
+cli.add_command(events_group)
+cli.add_command(session_group)
 register_traversal(cli)
 register_io(cli)
 cli.add_command(render_cmd)
 cli.add_command(info_cmd)
+register_schema(cli)
 
 
 def main() -> None:

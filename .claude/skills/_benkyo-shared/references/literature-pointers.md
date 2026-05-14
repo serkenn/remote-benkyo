@@ -4,14 +4,14 @@ Which operational decision is based on which paper. Use when debugging "why are 
 
 ## Sinha & Kapur (2021), *Review of Educational Research* — Productive Failure meta-analysis
 
-**Key effect**: PS-I (problem solving then instruction) outperforms I-PS for conceptual knowledge and transfer. Hedge's g = 0.36 [95% CI 0.20, 0.51], adjusted for publication bias = 0.87.
+**Key effect**: PS-I (problem solving then instruction) outperforms I-PS for conceptual knowledge and transfer. Hedge's *g* = 0.36, 95% CI [0.20, 0.51]. Egger's test and trim-and-fill detected no funnel-plot asymmetry, but a p-curve-based alternative estimate (van Aert et al. 2016 method) put the true effect at *g* = 0.87 — i.e., the 0.36 main estimate may be a lower bound under that method, not a center of an interval. **Don't quote it as "0.36–0.87" — it's two different estimators**.
 
 **Used for**:
 - Default PS-I mode for conceptual treatment
-- The "instruction building on student solutions" requirement (β = 0.27-0.28, the strongest predictor)
-- Multiple-RSM generation step (have learner consider alternatives)
-- Recognizing that low-graders and domain-general skills show reversed effect (use I-PS for true novices and domain-general)
-- Procedural knowledge has g ≈ -0.03 (no PS-I advantage), justifying I-PS for procedural treatment
+- Identifying **"instruction building on student solutions"** as a key fidelity factor. The cleanest evidence is the subgroup contrast (Table 3): PS-I *with* instruction-building yields *g* = 0.56; PS-I *without* it yields *g* = 0.20 (subgroup *p* = .02). Note: by Pearson importance this predictor ranks at the top (~.28), but its multiple-regression β collapses to ≈ 0.01 once correlated predictors are included — so report the subgroup *g*, not a β coefficient.
+- Multiple-RSM generation step (have learner consider alternatives) — this is one of the predictors that **does** have a nonzero β in the regression (β ≈ 0.27).
+- Recognizing that low-graders and domain-general skills show reversed effect (use I-PS for true novices and domain-general; domain-general subgroup *g* = -0.17).
+- Procedural knowledge has *g* ≈ -0.03 (no PS-I advantage), justifying I-PS for procedural treatment.
 
 **Boundary**: PF requires *relevant* prior knowledge to activate. Cut and treatment must be set such that the conceptual node's prereqs are at sufficient level.
 
@@ -21,7 +21,7 @@ Which operational decision is based on which paper. Use when debugging "why are 
 
 **Used for**:
 - The treatment lifecycle (procedural for proficient items, conceptual for items to be understood)
-- Rapid diagnostic methods (first-step approach: show problem, ask the next move; r = 0.92 with traditional knowledge tests, 4.9x time reduction)
+- Rapid diagnostic methods (first-step approach: show problem, ask the next move; **correlations up to** *r* = 0.92 with traditional knowledge tests across a series of studies, **with time reductions up to** 4.9x; Kalyuga 2006d / Kalyuga & Sweller 2004, as reviewed in Kalyuga 2007)
 - Tutorial adaptation: ES = 0.46 for adapted vs non-adapted (Kalyuga & Sweller 2004)
 - Avoiding over-scaffolding when learner is fluent — reduces breakdown depth, releases treatment
 
@@ -32,7 +32,7 @@ Which operational decision is based on which paper. Use when debugging "why are 
 
 ## Rhodes & Tauber (2011), *Psychological Bulletin* — Delayed JOL meta-analysis
 
-**Key effect**: delayed judgments of learning (JOLs) are far more accurate than immediate ones. Gamma correlation g = 0.93 (delayed) vs much lower for immediate.
+**Key effect**: delayed judgments of learning (JOLs) are far more accurate than immediate ones. Across 4,554 participants and 112 effect sizes, the delayed-over-immediate advantage in JOL accuracy (operationalized as gamma correlations between JOLs and later recall) corresponds to a meta-analytic Hedges's *g* = 0.93. **Important**: the 0.93 is the *effect size of the delayed-vs-immediate comparison*, not a gamma value itself. The gamma correlations are the inputs being compared; their absolute values vary by study.
 
 **Used for**:
 - Session-end JOL seed + session-start verification protocol
@@ -59,8 +59,8 @@ Which operational decision is based on which paper. Use when debugging "why are 
 - Calculation tasks: d = 0.92 (largest)
 - Anagrams: d = -0.05 (only negative one — when too disconnected from cues)
 - Incidental learning: d = 0.65 vs intentional d = 0.32 (don't frame as "test")
-- 1+ day delay: d = 0.64 (effect grows with delay)
-- Lists > 50: effect disappears (don't overload)
+- 1+ day delay: d = 0.64 (effect grows with delay; though not strictly monotonic)
+- Lists > 50 items: effect shrinks to d = 0.09, 95% CI [0.07, 0.11] — still positive but small; don't overload
 
 **Used for**:
 - Have learner attempt before being told (incidental framing)
@@ -130,11 +130,12 @@ Which operational decision is based on which paper. Use when debugging "why are 
 
 | Decision | Primary paper |
 |---|---|
-| Default PS-I for conceptual | Sinha & Kapur |
-| Default I-PS for procedural | Sinha & Kapur (g≈0 for procedural) |
+| Default PS-I for conceptual | Sinha & Kapur (g = 0.36 [0.20, 0.51]) |
+| Default I-PS for procedural | Sinha & Kapur (g ≈ -0.03 for procedural) |
+| Instruction-building emphasis | Sinha & Kapur (subgroup g = 0.56 with vs 0.20 without; p = .02) |
 | Anticipation step | Bjork 2013 / Kornell |
-| Incidental framing of probes | Bertsch |
-| Trust delayed JOL, not immediate | Rhodes & Tauber |
+| Incidental framing of probes | Bertsch (d = 0.65 incidental vs 0.32 intentional) |
+| Trust delayed JOL, not immediate | Rhodes & Tauber (Hedges's g = 0.93 for delayed-vs-immediate gamma comparison) |
 | 3 biases (stability/foresight/hindsight) | Bjork 2013 |
 | Hypercorrection (high-conf wrong) | Butterfield & Metcalfe |
 | Rapid diagnostic for expertise | Kalyuga |

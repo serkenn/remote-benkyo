@@ -1,6 +1,6 @@
 # Natural language → benkyo CLI operation mapping
 
-This is the translation layer between what the learner says (in natural language) and what the tutor (Claude Code) does internally with `benkyo` CLI. The learner does NOT know about procedural/conceptual/treatment/cut/prereq/related/node/edge/window — these are all internal vocabulary.
+This is the translation layer between what the learner says (in natural language) and what the tutor (Claude Code) does internally with `benkyo` CLI. The learner does NOT know about procedural/conceptual/treatment/cut/prereq/related/node/edge/window/event/log/record/schema/JSON — these are all internal vocabulary.
 
 When the learner uses one of those terms unprompted, accept it; but never introduce them yourself.
 
@@ -71,7 +71,27 @@ When the learner uses one of those terms unprompted, accept it; but never introd
 | 「これとこれ同じ」 | merge candidate | `concept merge` (when implemented; for now: manual edge redirect + delete) |
 | 「これは細かく分けたい」 | split candidate | `concept fork` (when implemented) + manual edge redistribute |
 
-## H. Meta / style (no CLI action)
+## H. Session boundaries and history (events log)
+
+The events log is the persistence layer for cross-session reasoning. Skills
+write to it on state changes and read from it at session boundaries. The
+learner never hears the word "event" or "log".
+
+| Learner says | Meaning | Internal action |
+|---|---|---|
+| 「今日はここまで」 + recap context | session-wrap (clean) | `session end --project <id> --summary-file <json>` (atomically writes session_end + delayed_jol_recorded events) |
+| 「急用、また」 | abrupt end | `session end` with minimal summary (`{"pending": [...current location...], "notes": "interrupted"}`) — skip delayed_jols solicitation |
+| 「久しぶり」「何やってたっけ」 | resume after gap | `events list --project <id> --kind delayed_jol_recorded --limit 10` to recover what learner claimed to remember; probe those (incidental framing) |
+| 「あれ、覚えてない」 | retrieval failure post-claim | `events add --kind hypercorrection_detected --payload {concept_id, prior_claim, current_state}` for re-probing later |
+
+| Internal action | Surface in natural language as |
+|---|---|
+| `events add --kind delayed_jol_recorded` | "覚えてられそうなの、自信あり/まあまあ/自信ないで教えて" (never "JOL", never "event", never "record") |
+| `events list --kind session_end` for project history | "前回 [概念名] までいったね", "[項目名] は [日付] にやった" (paraphrase as natural recall) |
+| `session end` invocation | (silent action; or "メモしといた") — never "session_end event を書いた" |
+| `events add --kind hypercorrection_detected` | (silent action; or "ここ後で確認しよう") |
+
+## I. Meta / style (no CLI action)
 
 | Learner says | Meaning | Response style change |
 |---|---|---|
@@ -96,8 +116,10 @@ These don't appear as direct mappings but inform interpretation:
 | "あー、なるほど" | comprehension claim | high-risk; verify with delayed JOL or probe |
 | Typo/short messages | low-stakes thinking | don't over-react |
 
-## Two cardinal rules
+## Three cardinal rules
 
-1. **Never expose internal vocabulary** (procedural/conceptual/treatment/cut/prereq/related/node/edge/window/traversal) in learner-facing utterances. Translate to natural language.
+1. **Never expose internal vocabulary** (procedural/conceptual/treatment/cut/prereq/related/node/edge/window/traversal/event/log/record/schema/JSON/metadata, plus internal IDs `c<n>` / `p<n>` / `prj<n>` / `e<n>`) in learner-facing utterances. Translate to natural language.
 
 2. **When in doubt, ask in natural terms.** Better to confirm "ここは公式使えればいい？それとも導出も？" than to silently make a treatment decision the learner didn't intend.
+
+3. **Events inform expectations, never replace evidence.** The events log is a *prior* for what to probe and how aggressively — it is never a *conclusion* about what the learner currently knows. Past `delayed_jol_recorded` with `claim: high` means "probe this lightly first" — not "skip this concept." Foresight bias (Bjork 2013) applies symmetrically to skills reading their own logs.

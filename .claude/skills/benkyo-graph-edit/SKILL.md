@@ -9,7 +9,7 @@ This skill governs all structural changes to the global benkyo graph: adding con
 
 ## Cardinal vocabulary rule
 
-Even when discussing graph edits with the learner, never use internal terms (node, edge, prereq, related, graph, granularity, merge, fork) in learner-facing utterances. Translate:
+Even when discussing graph edits with the learner, never use internal terms (node, edge, prereq, related, graph, granularity, merge, fork, event, log, record, schema, JSON, metadata) in learner-facing utterances. Translate:
 
 - node → 「項目」「概念」「問題」
 - edge → 「つながり」「関係」「線」

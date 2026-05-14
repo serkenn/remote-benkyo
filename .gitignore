@@ -219,7 +219,8 @@ __marimo__/
 
 # benkyo eval artifacts (not for distribution)
 .claude/skills/*-workspace/
-.claude/skills/comparison-report.md
+.claude/skills/comparison-report*.md
+.claude/skills/citation-fact-check.md
 
 # OCR'd papers (third-party copyright — kept locally for personal study only)
 docs/
