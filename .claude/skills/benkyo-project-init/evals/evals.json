@@ -6,21 +6,72 @@
       "name": "vague-subject-named",
       "prompt": "ラプラス変換を勉強したい、何から始めれば？",
       "expected_output": "学習者が漠然と subject を提示した時の typical case。既存 prj1 (ラプラス変換 ODE) を発見した場合は (a) `benkyo events list --project prj1 --kind session_end --limit 1` で前回 pending を確認, (b) `benkyo events list --project prj1 --kind delayed_jol_recorded --limit 10` で JOL 履歴を recovery, (c) 'resume / 差し替え / 更地' の 3 択を提示し選ばせる。新規開始の場合は (a) 具体 goal を 3-4 例で提示し選ばせる, (b) 教材の有無確認, (c) rapid diagnostic, (d) concept graph と初期 cut の提案と確認, (e) benkyo CLI で project/problem/concept/edge/treatment 作成。学習者向け発話に blackbox/whitebox/cut/treatment/node/edge/project/event/log/record/JSON/c<n>/p<n>/prj<n> など内部用語が現れないこと。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に内部用語 (blackbox/whitebox/treatment/node/edge/graph/event/log/c1/p1/prj1 等) が含まれていない"
+        },
+        {
+          "name": "asks_for_goal_or_offers_resume",
+          "description": "response.md に目標の確認または既存プロジェクトの再開確認が含まれている"
+        }
+      ]
     },
     {
       "id": 2,
       "name": "concrete-goal-with-materials",
       "prompt": "電気回路の試験勉強したい。教科書は『回路理論』, シラバスでは RLC 回路と過渡応答が範囲。過去問は別途渡せる。",
       "expected_output": "資料豊富ケース。tutor は (a) 教科書とシラバスを読んだ前提で graph を提案, (b) 過去問の有無に従って goal 問題を抽出, (c) 教科書での扱いから初期 cut を提案 (prune-first), (d) 確認をとって project 作成。資料の中で公式・表として扱われている物を blackbox, 導出が含まれる物を whitebox として提案する。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に内部用語が含まれていない"
+        },
+        {
+          "name": "proposes_initial_cut",
+          "description": "response.md に whitebox/blackbox の初期方針の提案が自然言語で含まれている"
+        }
+      ]
     },
     {
       "id": 3,
       "name": "goal-less-exploration",
       "prompt": "何か勉強したい、特に決めてない",
       "expected_output": "完全 goal-less ケース (lost-learner Case 4)。tutor は (a) 興味抽出の質問を 3-4 つ提示 (open-ended ではなく concrete), (b) 既存プロジェクトを進める選択肢も提示, (c) exploration モードを提示, (d) 強引に goal を設定させない。lost-learner-handling.md の Case 4 に従う。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に内部用語が含まれていない"
+        },
+        {
+          "name": "concrete_interest_questions",
+          "description": "response.md に open-ended ではなく具体的な選択肢付きの質問が含まれている"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "many-past-exams-clustered",
+      "prompt": "システム最適化の試験対策したい。過去問を全部解けるようになりたい。以下が手元にある過去問：\n\n【グループA: 無制約最適化・凸性】\n- 2021: f(x,y)=x²+2y²-2xy+3x の停留点を求め、極値かどうか判定せよ\n- 2022: f(x,y)=x³-3x+y²-2y の極値をすべて求めよ\n- 2023: f(x,y)=eˣ(1+y²) の停留点の性質を調べよ\n\n【グループB: KKT条件・制約付き最適化】\n- 2021: x²+y² を最小化せよ、制約: x+2y=5\n- 2022: 2x+3y を最小化せよ、制約: x²+y²≤1, x≥0, y≥0\n- 2023: x²+2y² を最小化せよ、制約: x+y≥2, x≥0\n\n【グループC: LP・シンプレックス法】\n- 2021: 2x+3y を最大化せよ、制約: x+y≤4, x≤3, y≥0\n- 2022: x+2y を最大化せよ、制約: 2x+y≤6, x+2y≤6, x,y≥0\n- 2023: 3x+y を最大化せよ、制約: x+y≤5, 2x+y≤8, x,y≥0",
+      "expected_output": "多数の過去問（3グループ×3問=9問）が与えられ「全部解けるようになりたい」というゴールがある場合。正解行動: (a) 3つのグループ（パターン）を認識する。(b) 「3パターン代表として登録する」vs「9問を個別に登録する」の選択肢を学習者に提示し、それぞれのトレードオフを説明する。(c) 「全部解けるようになりたい」というゴールに対しては個別9問の方がズレがないことを明示する。不正解行動: 聞かずに3パターンだけ登録する、または聞かずに全9問を登録する、またはランダムに数問だけ登録する。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "offers_choice_between_abstract_and_individual",
+          "description": "response.md に「3パターン」vs「9問個別」の選択肢が学習者に提示されている（または同等の問いかけ）"
+        },
+        {
+          "name": "explains_tradeoff_for_goal",
+          "description": "response.md に「全部解けるようになりたい」というゴールとの整合性（個別登録の方がズレがない）についての説明が含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に内部用語 (blackbox/whitebox/node/edge/graph/treatment/c1/p1/prj1 等) が含まれていない"
+        }
+      ]
     }
   ]
 }

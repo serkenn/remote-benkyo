@@ -9,9 +9,13 @@ This skill handles the operation of changing a concept's treatment within a proj
 
 The decision when to shift is part of this skill. The actual ongoing teaching is in `benkyo-tutoring`.
 
+## Scope of this skill
+
+This skill **decides and performs** the treatment shift — confirming intent, updating the graph, setting the treatment, and logging the change. It does NOT conduct the ensuing explanation or problem-solving. After any shift, defer immediately to `benkyo-tutoring` to continue the session.
+
 ## Cardinal vocabulary rule
 
-Internal terms (blackbox, whitebox, treatment, cut, commit, release, prereq, node, edge, graph, event, log, record, schema, JSON, metadata, treatment_changed) are NEVER spoken to the learner. Translate:
+Internal terms (blackbox, whitebox, treatment, cut, commit, release, prereq, node, edge, graph, event, log, record, schema, JSON, metadata, treatment_changed, toggle, split, granularity) are NEVER spoken to the learner. Translate:
 
 - commit / 「上に上げる」 → 「ここを掘り下げる」「ちゃんと理解する」
 - release / 「下に降ろす」 → 「公式で済ます」「ツールとして使う」「飛ばす」
@@ -73,6 +77,11 @@ Goal: open up the concept for full understanding (breakdown becomes traversable 
 4. **Set new prereqs to blackbox by default** (with reference content):
    - Commits intentionally cascade ONE level only; don't recursively whitebox the entire prereq chain
    - The learner committed THIS concept, not its prereqs
+4.5. **Light-probe each newly added prereq** before locking it as blackbox:
+   - Ask one small retrieval question per prereq ("∫₀^∞ e^(-st) dt は？" レベル)
+   - If fluent → blackbox + reference is appropriate
+   - If shaky → keep whitebox (traversable); add a `notes` entry so the tutor knows to address this prereq before teaching the target concept
+   Skipping this step risks "空中戦" — committing to a concept whose prereqs can't support PS-I.
 5. **Verify each prereq's treatment**: ensure each is blackbox with reference, OR explicitly known to be already mastered. If a prereq isn't ready, the commit may produce frustrating breakdown failures.
 6. **Update the target concept's treatment** to whitebox:
    ```
@@ -87,6 +96,7 @@ Goal: open up the concept for full understanding (breakdown becomes traversable 
      --payload '{"concept_id": "c5", "from": "blackbox", "to": "whitebox"}' \
      --notes "<why the learner asked or what triggered the shift>"
    ```
+   This event is the **authoritative record** of the change. The `treatment_changes` field in `session end` summary is a recap only — do not omit this `events add` in favor of relying on session end.
 8. **Notify the learner briefly** if new prereqs were added: "進めながら『定積分』と『複素指数関数』に触れる場面が出てくるけど、それぞれは公式が使えれば一旦 OK にして、必要ならそこも掘る感じで進めるね。"
 9. **Begin teaching loop** (defer to `benkyo-tutoring`).
 
@@ -123,6 +133,7 @@ Goal: close off the concept; just use the reference.
      --payload '{"concept_id": "c5", "from": "whitebox", "to": "blackbox"}' \
      --notes "<the fatigue/transfer-failure signal that triggered the release>"
    ```
+   This event is the **authoritative record** of the change. The `treatment_changes` field in `session end` summary is a recap only — do not omit this `events add` in favor of relying on session end.
 5. **Acknowledge the trade-off**: "じゃあこの公式を使う形で進めるね。気が向いたら戻ってきてもいい。"
 6. **Continue toward the original goal** (defer to `benkyo-tutoring`).
 
@@ -151,7 +162,9 @@ If the same concept oscillates commit ↔ release within a session, that's a sig
 - Genuine ambivalence about the depth needed — explicitly discuss what they want to achieve
 - The concept is at the wrong granularity (should be split — see granularity-guide.md)
 
-Pause the toggling. Talk it through.
+**Quantified heuristic**: if a concept toggles commit ↔ release **twice or more within 1–2 sessions**, treat this as a strong signal that the concept is over-broad. Don't keep toggling. Escalate to `benkyo-graph-edit` to consider splitting the concept into sub-aspects that can each be treated independently.
+
+Pause the toggling. Talk it through. If the learner can't articulate a single coherent "I understand X" statement that covers the whole concept, it should probably be split.
 
 ## Vocabulary to the learner
 

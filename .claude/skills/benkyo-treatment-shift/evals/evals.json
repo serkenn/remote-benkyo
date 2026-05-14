@@ -6,21 +6,133 @@
       "name": "explicit-commit-request",
       "prompt": "部分分数分解, ちゃんと理解したい。なんで分けられるのかも含めて。",
       "expected_output": "直接的な commit signal。tutor は (a) 学習者の意図を簡潔に確認 ('時間と集中力ある？'), (b) 部分分数分解 (c6) の prereq を benkyo breakdown で確認, (c) 既存 prereq が whitebox に揃っているか, prereq node が欠けていないか確認, (d) 必要なら新 prereq node を blackbox として追加 (1 階層のみ), (e) benkyo treatment unset で c6 を whitebox に, (f) `benkyo events add --kind treatment_changed --project prj1 --payload '{\"concept_id\":\"c6\",\"from\":\"blackbox\",\"to\":\"whitebox\"}'` で event 記録, (g) 学習者には '掘り下げる' / '理屈見る' のような natural language で伝え, 'commit' や 'treatment' や 'event' は使わない。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "confirms_intent_first",
+          "description": "response.md に時間/集中力の確認（'時間と集中力ある？'等）が含まれている"
+        },
+        {
+          "name": "checks_prereqs",
+          "description": "internal.md に benkyo breakdown コマンドが含まれている"
+        },
+        {
+          "name": "calls_treatment_unset",
+          "description": "internal.md に benkyo treatment unset または treatment set whitebox が含まれている"
+        },
+        {
+          "name": "logs_treatment_changed",
+          "description": "internal.md に events add --kind treatment_changed が含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に commit/treatment/blackbox/whitebox/event/log/record が含まれていない"
+        },
+        {
+          "name": "defers_to_tutoring",
+          "description": "internal.md に benkyo-tutoring への defer が含まれている"
+        }
+      ]
     },
     {
       "id": 2,
       "name": "indirect-release-fatigue",
       "prompt": "Bromwich 積分の breakdown 3 回目だけど, まだ詰まる。複素関数の経路積分とか, 今やってる ODE 解きから遠いし...",
       "expected_output": "間接的 release signal (繰り返し breakdown 失敗 + 疲労 + goal から遠い)。tutor は (a) 自動切替せず, 学習者に明示的に release を提案 ('一旦この公式を使う形に切り替えて先に進む？後で気持ちに余裕できたら戻ってきても良い'), (b) 学習者の同意を取って blackbox に release, (c) reference content を準備 (公式集), (d) `benkyo events add --kind treatment_changed` で event 記録, (e) goal に戻る。'release', 'treatment', 'blackbox', 'event', 'record' などの語は使わない。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "proposes_not_auto_executes",
+          "description": "response.md に release の提案が含まれ、学習者の同意を求めている（自動実行していない）"
+        },
+        {
+          "name": "logs_treatment_changed",
+          "description": "internal.md に events add --kind treatment_changed が含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に release/treatment/blackbox/whitebox/event/record が含まれていない"
+        }
+      ]
     },
     {
       "id": 3,
       "name": "commit-without-prereqs",
       "prompt": "ラプラス変換の定義のところ, 積分の収束域とか Re(s) > a の意味も含めてちゃんと理解したい",
       "expected_output": "commit リクエストだが prereq の整備が必要なケース。tutor は (a) ラプラス変換の定義 (c1) を whitebox 化したい要望を受け止め, (b) prereq (広義積分, 複素数の実部, 積分の収束判定) が既存 graph にあるか確認, (c) ない物は add (concept add) + 関連 edge を追加, (d) 新規 prereq はデフォルト blackbox + 簡潔な reference, (e) その後 treatment unset で c1 を whitebox に, (f) 学習者には透明に '進める前提として広義積分とか出てくるけど, それぞれ公式が使えれば一旦 OK として進めるね' と説明。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "checks_prereq_existence",
+          "description": "internal.md に concept find または breakdown コマンドが含まれている"
+        },
+        {
+          "name": "adds_missing_prereqs",
+          "description": "internal.md に concept add + edge add が含まれている"
+        },
+        {
+          "name": "calls_treatment_unset",
+          "description": "internal.md に treatment unset または treatment set whitebox が含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に forbidden internal terms が含まれていない"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "shaky-prereq-on-commit",
+      "prompt": "逆ラプラス変換、理由まで含めてちゃんと理解したい。でも部分分数分解のやり方、正直あまり自信ない",
+      "expected_output": "commit リクエストだが prereq (部分分数分解) が shaky であることが判明しているケース。tutor は (a) 逆ラプラス変換 (c5) のcommit意図を確認, (b) prereqとして部分分数分解 (c6) があることを確認, (c) c6 が shaky であることが学習者の発言から明らか → c6 を blackbox にせず whitebox (traversable) のままにする判断, (d) c6 の治療方針を学習者と共有 ('部分分数分解から一緒に見る形になるね'), (e) c5 を whitebox 化, events add --kind treatment_changed 記録, (f) c6 から tutoring を始める形で benkyo-tutoring に defer。prereqが shaky なままblackbox化して c5 の PS-I に入らない判断が重要。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "does_not_blackbox_shaky_prereq",
+          "description": "internal.md で部分分数分解を blackbox に設定していない（shaky なのでwhiteboxのまま）"
+        },
+        {
+          "name": "starts_from_prereq",
+          "description": "response.md または internal.md に部分分数分解から始める旨が含まれている"
+        },
+        {
+          "name": "c5_commit_suspended_not_premature",
+          "description": "internal.md で c5 のcommitがこのターンに実行されておらず（c6が shaky なため保留）、treatment_changed event も発火していない"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に forbidden internal terms が含まれていない"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "toggle-split-suspicion",
+      "prompt": "（同セッション内で凸関数をwhiteboxにした後、30分後に）やっぱり凸関数は公式でいい。でも正定値性はちゃんと理解したい",
+      "expected_output": "同一セッション内での commit→release oscillation ケース。tutor は (a) release の提案自体は受け入れ可能だが、(b) 同セッション内での toggle を検知 → split suspicion の可能性を指摘, (c) '凸関数' という concept が「定義・性質の確認」と「判定手法 (正定値性)」の2つの側面を持っていて、それぞれ treatment が異なる可能性があることを learner に伝える, (d) benkyo-graph-edit に defer して split を検討することを提案 ('凸関数を「定義と大域性質」と「判定条件」に分けることもできるよ'), (e) 学習者が split を望まない場合は正定値性だけ whitebox にして凸関数 (残り) は blackbox として進める現実的な対応もする。'toggle', 'split', 'granularity' などの内部語は使わない。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "detects_toggle",
+          "description": "internal.md に同セッション内のtoggle検知が明示されている"
+        },
+        {
+          "name": "raises_split_suspicion",
+          "description": "response.md または internal.md に概念の粒度が粗すぎる可能性への言及が含まれている"
+        },
+        {
+          "name": "refers_to_graph_edit",
+          "description": "response.md または internal.md に benkyo-graph-edit への参照または分割の提案が含まれている"
+        },
+        {
+          "name": "has_fallback_plan",
+          "description": "response.md に split を断った場合の現実的な代替案（正定値性だけwhitebox等）が含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に toggle/split/granularity/treatment/blackbox/whitebox 等の内部語が含まれていない"
+        }
+      ]
     }
   ]
 }

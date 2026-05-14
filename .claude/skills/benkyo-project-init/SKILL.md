@@ -111,6 +111,20 @@ Based on goal + materials (or general knowledge if no materials):
 
 1. **Sketch ~10-20 concept nodes** at section-level granularity (see `../_benkyo-shared/references/granularity-guide.md`). Don't over-specify.
 2. **Identify goal problems**: which problem(s) does the learner want to solve? At minimum 1, ideally 1-3.
+
+   **When many past exam problems are provided (5+)**: they often cluster into problem types. Do NOT silently abstract them into types or silently register all individually. Present the choice explicitly:
+
+   ```
+   Tutor: 過去問が3つのパターンに分かれてますね。
+     登録の仕方、どっちにする？
+     A) パターン代表として3問だけ登録 → シンプル、繰り返し練習向き
+     B) 9問を全部個別に登録 → 「全問解く」目標に直接対応、進捗が問題単位で追える
+   
+     「全問解けるようになりたい」という目標には B の方がズレがない。
+   ```
+
+   Wait for the learner's answer before registering anything. If the learner's stated goal is "全部解けるようになる" or similar exhaustive completion, proactively recommend individual registration and explain why.
+
 3. **Draw prereq edges**: which concepts are needed by which. Don't draw transitive edges; only direct dependencies.
 4. **Identify confusable pairs** (related-confusable): if any pair of concepts is known to be commonly confused, draw a `related` edge.
 

@@ -6,21 +6,96 @@
       "name": "clean-end-mid-progress",
       "prompt": "今日はここまで, また明日やる。",
       "expected_output": "標準的な session 終了。tutor は (a) 自然な区切り点で止める (mid-breakdown なら次の natural break まで進めるか確認), (b) 今日扱った内容を natural language で recap (3-4 行), (c) delayed JOL seed を solicitate ('明日でも説明できそうなのは？自信あり/まあまあ/自信ないで分けて'), (d) `benkyo session end --project <id> --summary-file ...` で atomically 永続化 (session_end + delayed_jol_recorded events; project.metadata は触らない), (e) 次回の起点を提示。'delayed JOL', 'session note', 'metadata', 'event', 'log', 'record', 'JSON' は学習者には言わない。'振り返り' / 'メモしとく' のような natural language で。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_session_end_command",
+          "description": "internal.md に benkyo session end コマンドが含まれている"
+        },
+        {
+          "name": "solicits_jol_incidentally",
+          "description": "response.md に delayed JOL の solicitation が含まれ、'テスト'/'試験' 等の test framing を使っていない"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に blackbox/whitebox/treatment/event/log/record/metadata/delayed_jol/JSON が含まれていない"
+        },
+        {
+          "name": "no_proactive_spacing_recommendation",
+          "description": "response.md に '1-2日' 等の spacing 推奨が proactively 含まれていない（asked 時のみOK）"
+        }
+      ]
     },
     {
       "id": 2,
       "name": "abrupt-interruption",
       "prompt": "あ, 急用入った, ごめん落ちる",
       "expected_output": "急な終了。tutor は (a) 長い recap や delayed JOL を skip, (b) 戻れる目印だけを `benkyo session end --project <id> --summary '{\"pending\": [...], \"notes\": \"interrupted\"}'` で persist (delayed_jols リストは空), (c) 学習者には 'メモしといた, 続きから入れるよ' のような短い acknowledgment, (d) お疲れの挨拶で締める。10 秒以内で終わる感じ。'event', 'session_end', 'JSON' などの内部語は使わない。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "uses_session_end_minimal",
+          "description": "internal.md に benkyo session end が含まれ、pending/notes のみの最小summaryを使っている"
+        },
+        {
+          "name": "skips_jol",
+          "description": "response.md に JOL solicitation が含まれていない（急用なのでskip）"
+        },
+        {
+          "name": "brief_response",
+          "description": "response.md が短い（100字以内程度）"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に forbidden internal terms が含まれていない"
+        }
+      ]
     },
     {
       "id": 3,
       "name": "long-gap-resume",
       "prompt": "(1 週間ぶりに戻る場面で) ようやく続き始めるかー, 何やってたっけ",
       "expected_output": "長期間ブランク後の再開 (session wrap skill ではなく project-init の '長期間ブランク handling' でカバーする内容。session-wrap skill としては, '前回の wrap で記録した delayed JOL seed が今回 init で使われる' という連携を理解していれば十分)。tutor は project-init skill に defer する判断ができるべき。",
-      "files": []
+      "files": [],
+      "assertions": [
+        {
+          "name": "defers_to_project_init",
+          "description": "response.md または internal.md に project-init / benkyo-project-init へのdeferが明示されている"
+        },
+        {
+          "name": "does_not_run_wrap_protocol",
+          "description": "internal.md に benkyo session end コマンドが含まれていない（wrapではなくresume）"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に forbidden internal terms が含まれていない"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "mid-breakdown-interrupted",
+      "prompt": "終わり、もうダメだ今日は。breakdown の途中なんだけど",
+      "expected_output": "breakdown 中断での終了。tutor は (a) 中断を責めない。(b) 「今止めても大丈夫」という genuine two-choice を提示 ('今止めても大丈夫。あと 1 段で区切りにもできるけど, どうする？')。(c) 学習者が止めると言ったら, pending に breakdown の途中状態 (どの concept の何処まで) を記録して session end。(d) abrupt end と同様に recap は短め。(e) 「疲れたなら休もう」的なモラライズをしない。",
+      "files": [],
+      "assertions": [
+        {
+          "name": "genuine_two_choice",
+          "description": "response.md に '今止めても大丈夫' または等価の genuine alternative が含まれている（強制的な'やる？'のみではない）"
+        },
+        {
+          "name": "no_moralizing",
+          "description": "response.md に '疲れたなら休もう' 等のモラライズが含まれていない"
+        },
+        {
+          "name": "persists_breakdown_state",
+          "description": "internal.md に breakdown の途中状態を pending に記録する session end コマンドが含まれている"
+        },
+        {
+          "name": "no_forbidden_vocabulary",
+          "description": "response.md に forbidden internal terms が含まれていない"
+        }
+      ]
     }
   ]
 }

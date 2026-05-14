@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-05-15
+
+### Changed
+
+- **benkyo-session-wrap**: description fixed (project.metadata → events log); mid-breakdown option A
+  rewritten as genuine two-choice; proactive spacing recommendation removed (only on request).
+- **benkyo-treatment-shift**: scope section added; prereq light-probe step (4.5) added to commit
+  protocol; treatment_changed authoritative-record note added; toggle→split heuristic strengthened
+  with quantified threshold; toggle/split/granularity added to forbidden vocabulary.
+- **benkyo-project-init**: problem-node granularity rule added — when 5+ past exam problems cluster
+  into types, present A/B choice to learner before registering; recommend individual registration
+  when goal is exhaustive completion.
+- **evals**: assertions added to all three skills; new evals: session-wrap eval-4
+  (mid-breakdown-interrupted), treatment-shift eval-4 (shaky-prereq-on-commit), treatment-shift
+  eval-5 (toggle-split-suspicion), project-init eval-4 (many-past-exams-clustered).
+
 ## [0.4.6] - 2026-05-15
 
 ### Changed

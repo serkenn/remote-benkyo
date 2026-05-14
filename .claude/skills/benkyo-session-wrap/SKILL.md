@@ -1,6 +1,6 @@
 ---
 name: benkyo-session-wrap
-description: Wrap up a benkyo learning session cleanly and prepare for resumption. Use this skill when the learner says 「今日はここまで」「終わり」「また明日」「疲れた」「時間ない」「もう寝る」, or signals they're about to stop. Also trigger when you (the tutor) notice the natural completion of a topic and want to propose a stopping point, or when a session has gone long enough that a wrap is appropriate. This skill handles the recap, delayed JOL seeding, and persistence of state into project.metadata so the next session can resume cleanly.
+description: Wrap up a benkyo learning session cleanly and prepare for resumption. Use this skill when the learner says 「今日はここまで」「終わり」「また明日」「疲れた」「時間ない」「もう寝る」, or signals they're about to stop. Also trigger when you (the tutor) notice the natural completion of a topic and want to propose a stopping point, or when a session has gone long enough that a wrap is appropriate. This skill handles the recap, delayed JOL seeding, and persistence of session state through the events log so the next session can resume cleanly.
 ---
 
 # benkyo-session-wrap: ending a session cleanly
@@ -60,7 +60,7 @@ Don't end mid-breakdown if avoidable. Look for:
 - A retrieval check just answered (correctly or not)
 
 If the learner says "終わり" in the middle of a breakdown:
-- Option A: "あと 1 段で区切りつくけど, やる？" (often the learner says yes)
+- Option A: "今止めても大丈夫。あと 1 段で区切りにもできるけど, どうする？"
 - Option B: If no time, capture the mid-state for resumption (see Abrupt end below)
 
 ### 2. Recap accomplishments
@@ -127,11 +127,9 @@ Brief, encouraging close:
 
 ```
 Tutor: 了解、お疲れさま。次回は [next session start] から始めるね。
-  必要なら 1-2 日以内が retention の観点ではちょうどいい間隔だけど, 
-  気にせず生活に合わせて。
 ```
 
-The 1-6 day interval recommendation (Adesope) can be mentioned as a soft suggestion, not pressure.
+Only mention the 1–6 day interval (Adesope) if the learner asks about timing, or if a long gap is explicitly expected.
 
 ## Abrupt end ("急用、また今度")
 
