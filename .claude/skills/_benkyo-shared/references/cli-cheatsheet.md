@@ -87,14 +87,13 @@ benkyo render --project <id> [--scope <window|project|graph>] [--format <mermaid
 ```
 
 - Default scope: `window` (BFS from goal problems via prereq edges).
-- `--scope project`: all nodes explicitly registered in the project (project_concepts + goals). Use when you want the full picture — practice problems, formula concepts, and related items outside the window.
+- `--scope project`: BFS from goals via prereq edges, blackbox nodes do NOT terminate traversal (unlike window). Shows the full prereq graph rooted at goals including concepts behind the blackbox boundary.
 - `--scope graph`: entire global concept/problem graph.
 - Default format: mermaid (embeddable in markdown).
 - Without `--output`: raw text on stdout (pipe-friendly: `... --format dot | dot -Tpng > graph.png`).
 - Node labels: concept `name` field (short); problem statement truncated to 40 chars.
-- Shape conventions: problem = stadium, whitebox = rectangle, blackbox = cylinder.
+- Color conventions: problem = grey stadium, whitebox = blue rectangle, blackbox = amber rectangle. All shapes use `classDef` (mermaid) / `fillcolor` (DOT).
 - Related edges are undirected dashed (`-.-` in mermaid) — symmetric "easy to confuse" relationship.
-- Blackbox nodes get `classDef blackbox` fill color in mermaid output.
 
 ## Events (append-only log of state changes)
 

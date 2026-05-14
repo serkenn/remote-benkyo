@@ -70,7 +70,7 @@ You: What does the plan look like?
 You: Where am I in this?
 ```
 
-Claude will render the current concept graph via `benkyo render --format mermaid` — problems as stadium shapes, "really understand" concepts as rectangles, "use as a tool" concepts as cylinders. Mermaid renders inline on GitHub, in Claude Code's chat, and in any markdown-aware viewer.
+Claude will render the current concept graph via `benkyo render --format mermaid` — problems as stadiums (grey), "really understand" concepts as rectangles (blue), "use as a tool" concepts as rectangles (amber). Mermaid renders inline on GitHub, in Claude Code's chat, and in any markdown-aware viewer.
 
 You can also drive it yourself:
 
