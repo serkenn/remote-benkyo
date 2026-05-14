@@ -36,30 +36,28 @@ The tutor read your project state from the database, proposed a starting point b
 At any point, ask to see the map (`show me the map` / `全体見せて`):
 
 ```mermaid
-flowchart TD
-  classDef problem fill:#e2e8f0,stroke:#94a3b8
-  classDef whitebox fill:#dbeafe,stroke:#3b82f6
-  classDef blackbox fill:#fde68a,stroke:#f59e0b
-
-  p1["2024 Q1: convexity + KKT"]
-  c1["Convex functions"]
-  c2["Hessian matrix"]
-  c3["Positive definiteness"]
-  c4["Partial derivatives"]
-  c5["Lagrange multipliers"]
-  c6["Linear algebra"]
-
-  p1 --> c1
-  p1 --> c5
-  c1 --> c2
-  c2 --> c3
-  c2 --> c4
-  c3 --> c6
-  c5 -.- c1
-
-  class p1 problem
-  class c1,c2,c3 whitebox
-  class c4,c5,c6 blackbox
+graph TD
+    c1["Laplace transform definition"]
+    c2["Basic transform table"]
+    c3["Laplace linearity"]
+    c4["Differentiation rule"]
+    c5["Inverse Laplace transform"]
+    c6["Partial fraction decomposition"]
+    p1(["Solve ODE via Laplace"])
+    c2 --> c1
+    c4 --> c1
+    c5 --> c2
+    c5 --> c6
+    p1 --> c2
+    p1 --> c3
+    p1 --> c4
+    p1 --> c5
+    classDef problem  fill:#f0f4ff,stroke:#6b7280,stroke-width:1px
+    classDef whitebox fill:#dbeafe,stroke:#3b82f6,stroke-width:1px
+    classDef blackbox fill:#fde68a,stroke:#d97706,stroke-width:2px
+    class p1 problem
+    class c1,c4,c5 whitebox
+    class c2,c3,c6 blackbox
 ```
 
 **Blue** = understand the why (derivation, proof). **Amber** = use the formula (tool). **Grey** = exam goal. The map doesn't disappear when you break down into a prerequisite — you always know where you are and how far remains.
