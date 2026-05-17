@@ -4,6 +4,8 @@
 [![Python](https://img.shields.io/pypi/pyversions/benkyo.svg)](https://pypi.org/project/benkyo/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> [日本語版 README](./README-jp.md)
+
 **You can go deep without losing the syllabus.**
 
 Drop your past exams, textbook, and syllabus into Claude Code. benkyo turns them into a persistent tutor that remembers what you decided to understand deeply, what to treat as a tool, and how far you are from the exam.

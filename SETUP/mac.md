@@ -1,140 +1,135 @@
-# macOS セットアップ
+# macOS Setup
 
-[← セットアップ概要に戻る](./OVERVIEW.md)
+[← Back to Setup Overview](./OVERVIEW.md) | [日本語版](./mac-jp.md)
 
 ---
 
-## CLI モード
+## CLI mode
 
-### 前提条件
+### Prerequisites
 
-| ツール | 推奨バージョン | 確認コマンド |
+| Tool | Required version | Check |
 |---|---|---|
-| Python | 3.12 以上 | `python3 --version` |
-| uv または pipx | 最新 | `uv --version` / `pipx --version` |
-| Claude Code | 最新 | `claude --version` |
+| Python | 3.12+ | `python3 --version` |
+| uv or pipx | latest | `uv --version` / `pipx --version` |
+| Claude Code | latest | `claude --version` |
 
-### 1. Python と uv をインストール
+### 1. Install Python and uv
 
 ```bash
-# Homebrew で uv をインストール（推奨）
+# Install uv via Homebrew (recommended)
 brew install uv
 
-# または公式インストーラー
+# Or use the official installer
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 2. benkyo CLI をインストール
+### 2. Install the benkyo CLI
 
 ```bash
 uv tool install benkyo
 benkyo --version
 ```
 
-### 3. Claude Code をインストール
+### 3. Install Claude Code
 
 ```bash
-# npm 経由
+# via npm
 npm install -g @anthropic-ai/claude-code
 
-# または Homebrew
+# or via Homebrew
 brew install claude-code
 ```
 
-### 4. benkyo スキルをインストール
+### 4. Install the benkyo skills
 
-Claude Code を起動後:
+After launching Claude Code:
 
 ```
 /plugin marketplace add youseiushida/benkyo
 /plugin install benkyo
 ```
 
-再起動すると `/help` に 5 つのスキルが表示されます。
+Restart Claude Code — the 5 skills appear in `/help`.
 
-### 5. 学習を開始
+### 5. Start studying
 
-教材ファイル（PDF・テキスト等）があるディレクトリで Claude Code を起動し、話しかけます:
+Launch Claude Code in the directory where your study materials live, then describe what you want:
 
 ```
-You: 数学の期末試験が 2 週間後にあります。過去問と教科書 PDF を用意しました。
+You: I have past exam papers and the textbook PDF for calculus. The exam is in 2 weeks.
 ```
 
 ---
 
-## Web クライアント（iPad などから使う）
+## Web client (iPad / browser access)
 
-### 前提条件
+### Prerequisites
 
-| ツール | 推奨バージョン | 確認コマンド |
+| Tool | Required version | Check |
 |---|---|---|
-| Docker Desktop | 最新 | `docker --version` |
+| Docker Desktop | latest | `docker --version` |
 
-### 1. Docker Desktop をインストール
+### 1. Install Docker Desktop
 
-[Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/) からダウンロードしてインストールします。
+Download and install [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/).
 
-### 2. リポジトリをクローン
+### 2. Clone the repository
 
 ```bash
 git clone https://github.com/youseiushida/benkyo.git
 cd benkyo
 ```
 
-### 3. 起動
+### 3. Start
 
 ```bash
 docker compose up -d
 ```
 
-初回ビルドには数分かかります。完了後、ブラウザで以下にアクセスします:
+The first build takes a few minutes. Once complete, open in your browser:
 
 ```
 http://localhost:3000
 ```
 
-同じ LAN 上の iPad や他のデバイスからは:
+From an iPad or other device on the same LAN:
 
 ```
-http://<Macの IPアドレス>:3000
+http://<Mac's IP address>:3000
 ```
 
-Mac の IP アドレスは「システム設定 → Wi-Fi → 詳細 → TCP/IP」で確認できます。
+Find your Mac's IP in **System Settings → Wi-Fi → Details → TCP/IP**.
 
-### 4. 外出先からアクセス（Cloudflare Tunnel）
+### 4. Remote access (Cloudflare Tunnel)
 
-1. [Cloudflare Zero Trust ダッシュボード](https://one.dash.cloudflare.com/) でトンネルを作成してトークンを取得
-2. Web UI の **設定（⚙️）→ 外部アクセス設定** にトークンを入力して保存
-3. `cloudflared` コンテナが自動起動し、外部向け HTTPS URL が有効になります
+1. Create a tunnel at the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/) and copy the token
+2. In the web UI, open **Settings (⚙️) → External Access** and paste the token
+3. The `cloudflared` container starts automatically and an HTTPS URL becomes active
 
-### 停止・再起動
+### Stop / restart
 
 ```bash
-# 停止
-docker compose down
-
-# 再起動（データは benkyo_data ボリュームに永続化されます）
-docker compose up -d
+docker compose down    # stop
+docker compose up -d   # restart (data persists in the benkyo_data volume)
 ```
 
 ---
 
-## トラブルシューティング
+## Troubleshooting
 
 **`benkyo: command not found`**
 ```bash
-# PATH を確認
 export PATH="$HOME/.local/bin:$PATH"
-# ~/.zshrc または ~/.bash_profile に追記して永続化
+# Add to ~/.zshrc or ~/.bash_profile to persist
 ```
 
-**Docker でポート 3000 が使われている**
+**Port 3000 already in use**
 ```bash
-# 別ポートを使う
 sed -i '' 's/0.0.0.0:3000/0.0.0.0:8080/' docker-compose.yml
 docker compose up -d
 ```
 
-**Claude Code スキルが表示されない**
-- Claude Code を完全に終了して再起動してください
-- `benkyo --version` で CLI が動作していることを確認してください
+**benkyo skills not showing in Claude Code**
+- Fully quit and restart Claude Code
+- Verify the CLI works: `benkyo --version`

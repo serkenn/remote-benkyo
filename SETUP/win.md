@@ -1,84 +1,84 @@
-# Windows セットアップ
+# Windows Setup
 
-[← セットアップ概要に戻る](./OVERVIEW.md)
+[← Back to Setup Overview](./OVERVIEW.md) | [日本語版](./win-jp.md)
 
-> **推奨:** Windows では WSL 2 上で動かすことを推奨します。ネイティブ Windows でも動きますが、WSL 2 の方がトラブルが少ないです。
+> **Recommended:** Running benkyo under WSL 2 is strongly recommended. Native Windows works, but WSL 2 avoids most friction points.
 
 ---
 
-## CLI モード（WSL 2 推奨）
+## CLI mode (WSL 2 recommended)
 
-### WSL 2 を使う場合（推奨）
+### Using WSL 2 (recommended)
 
-#### 1. WSL 2 をセットアップ
+#### 1. Set up WSL 2
 
-PowerShell（管理者）で:
+In PowerShell (Administrator):
 
 ```powershell
 wsl --install
 ```
 
-再起動後、Ubuntu がインストールされます。その後は [Debian / Ubuntu ガイド](./debian.md) の手順に従ってください。
+After rebooting, Ubuntu will be installed. Follow the [Debian / Ubuntu guide](./debian.md) from that point.
 
 ---
 
-### ネイティブ Windows を使う場合
+### Native Windows
 
-#### 前提条件
+#### Prerequisites
 
-| ツール | 推奨バージョン | 確認コマンド |
+| Tool | Required version | Check |
 |---|---|---|
-| Python | 3.12 以上 | `python --version` |
-| uv または pipx | 最新 | `uv --version` |
-| Claude Code | 最新 | `claude --version` |
+| Python | 3.12+ | `python --version` |
+| uv or pipx | latest | `uv --version` |
+| Claude Code | latest | `claude --version` |
 
-#### 1. Python をインストール
+#### 1. Install Python
 
-[python.org](https://www.python.org/downloads/) からダウンロード。インストール時に **「Add Python to PATH」にチェックを入れること**。
+Download from [python.org](https://www.python.org/downloads/). **Check "Add Python to PATH"** during installation.
 
-#### 2. uv をインストール
+#### 2. Install uv
 
-PowerShell で:
+In PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-#### 3. benkyo CLI をインストール
+#### 3. Install the benkyo CLI
 
 ```powershell
 uv tool install benkyo
 benkyo --version
 ```
 
-文字化けが出る場合は PowerShell を UTF-8 モードに:
+If you see garbled output, switch PowerShell to UTF-8 mode:
 
 ```powershell
 $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()
 ```
 
-`$PROFILE` に追記して永続化することを推奨します。
+Add this to `$PROFILE` to make it permanent.
 
-#### 4. Claude Code をインストール
+#### 4. Install Claude Code
 
 ```powershell
 npm install -g @anthropic-ai/claude-code
 ```
 
-Node.js が必要です。[nodejs.org](https://nodejs.org/) からインストールしてください。
+Node.js is required — install it from [nodejs.org](https://nodejs.org/).
 
-#### 5. benkyo スキルをインストール
+#### 5. Install the benkyo skills
 
-Claude Code を起動後:
+After launching Claude Code:
 
 ```
 /plugin marketplace add youseiushida/benkyo
 /plugin install benkyo
 ```
 
-#### 6. 学習を開始
+#### 6. Start studying
 
-教材ファイルがあるフォルダで Claude Code を起動します:
+Launch Claude Code in the folder where your study materials are:
 
 ```powershell
 cd C:\Users\YourName\Documents\study-math
@@ -87,81 +87,80 @@ claude
 
 ---
 
-## Web クライアント（ブラウザ・iPad から使う）
+## Web client (browser / iPad access)
 
-### 前提条件
+### Prerequisites
 
-| ツール | 確認コマンド |
+| Tool | Check |
 |---|---|
 | Docker Desktop for Windows | `docker --version` |
-| WSL 2（Docker Desktop が使用） | `wsl --status` |
+| WSL 2 (used by Docker Desktop) | `wsl --status` |
 
-### 1. Docker Desktop をインストール
+### 1. Install Docker Desktop
 
-[Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/) をインストールします。WSL 2 バックエンドを使うよう設定してください（デフォルト）。
+Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/). Keep the default WSL 2 backend enabled.
 
-### 2. リポジトリをクローン
+### 2. Clone the repository
 
-PowerShell または WSL 端末で:
+In PowerShell or a WSL terminal:
 
 ```bash
 git clone https://github.com/youseiushida/benkyo.git
 cd benkyo
 ```
 
-### 3. 起動
+### 3. Start
 
 ```powershell
 docker compose up -d
 ```
 
-ブラウザで `http://localhost:3000` にアクセスします。
+Open `http://localhost:3000` in your browser.
 
-同じ LAN 上の iPad などからは:
+From an iPad or other device on the same LAN:
 
 ```
-http://<Windows の IP アドレス>:3000
+http://<Windows IP address>:3000
 ```
 
-Windows の IP アドレスは PowerShell で確認:
+Find your IP in PowerShell:
 
 ```powershell
 ipconfig | findstr "IPv4"
 ```
 
-### 4. 外出先からアクセス（Cloudflare Tunnel）
+### 4. Remote access (Cloudflare Tunnel)
 
-1. [Cloudflare Zero Trust ダッシュボード](https://one.dash.cloudflare.com/) でトンネルを作成してトークンを取得
-2. Web UI の **設定（⚙️）→ 外部アクセス設定** にトークンを入力して保存
-3. `cloudflared` コンテナが自動起動します
+1. Create a tunnel at the [Cloudflare Zero Trust dashboard](https://one.dash.cloudflare.com/) and copy the token
+2. In the web UI, open **Settings (⚙️) → External Access** and paste the token
+3. The `cloudflared` container starts automatically
 
-### 停止
+### Stop
 
 ```powershell
 docker compose down
 ```
 
-データは `benkyo_data` という Docker ボリュームに永続化されます。
+Data persists in the `benkyo_data` Docker volume.
 
 ---
 
-## トラブルシューティング
+## Troubleshooting
 
-**`benkyo` が認識されない（ネイティブ Windows）**
+**`benkyo` not recognised (native Windows)**
 
 ```powershell
-# PATH に uv の bin ディレクトリを追加
 $env:PATH += ";$env:USERPROFILE\.local\bin"
-# 永続化するには システム → 詳細設定 → 環境変数 で PATH を編集
+# To persist: edit PATH in System → Advanced Settings → Environment Variables
 ```
 
-**Docker が起動しない**
-- Docker Desktop が実行中か確認（タスクバーのアイコン）
-- WSL 2 が有効か確認: `wsl --status`
+**Docker won't start**
+- Check that Docker Desktop is running (system tray icon)
+- Verify WSL 2 is enabled: `wsl --status`
 
-**日本語が文字化けする（ネイティブ Windows）**
-- PowerShell / cmd で `chcp 65001` を実行して UTF-8 に切り替えてください
+**Garbled characters (native Windows)**
+- Run `chcp 65001` in PowerShell / cmd to switch to UTF-8
 
-**Claude Code でスキルが表示されない**
-- Claude Code を完全終了して再起動
-- `benkyo --version` で CLI が動作していることを確認
+**benkyo skills not showing in Claude Code**
+- Fully quit and restart Claude Code
+- Verify the CLI works: `benkyo --version`

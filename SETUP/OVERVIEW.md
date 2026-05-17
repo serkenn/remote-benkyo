@@ -1,10 +1,25 @@
-# セットアップガイド
+# Setup Guide / セットアップガイド
 
-benkyo には **2 つの使い方**があります。目的の環境を選んでください。
+benkyo has two modes. Pick your environment below.  
+benkyo には 2 つの使い方があります。環境を選んでください。
 
 ---
 
-## 使い方を選ぶ
+## Environment guides / 環境別ガイド
+
+| | macOS | Windows | Debian / Ubuntu |
+|---|---|---|---|
+| 🇬🇧 English | [mac.md](./mac.md) | [win.md](./win.md) | [debian.md](./debian.md) |
+| 🇯🇵 日本語 | [mac-jp.md](./mac-jp.md) | [win-jp.md](./win-jp.md) | [debian-jp.md](./debian-jp.md) |
+
+---
+
+## Modes / 使い方
+
+| Mode | Description | Best for |
+|---|---|---|
+| **CLI mode** | Install benkyo CLI + Claude Code locally | Developers already using Claude Code |
+| **Web client** | Deploy via Docker, access from browser (iPad etc.) | Tablet / multi-device use |
 
 | 使い方 | 概要 | 向いている人 |
 |---|---|---|
@@ -13,37 +28,48 @@ benkyo には **2 つの使い方**があります。目的の環境を選んで
 
 ---
 
-## 環境別ガイド
+## Quick start
 
-- [macOS](./mac.md)
-- [Windows](./win.md)
-- [Debian / Ubuntu](./debian.md)
+### CLI mode
+
+```bash
+# 1. Install the CLI
+uv tool install benkyo        # or: pipx install benkyo
+
+# 2. Install skills (inside Claude Code)
+/plugin marketplace add youseiushida/benkyo
+/plugin install benkyo
+```
+
+### Web client (Docker)
+
+```bash
+docker compose up -d
+# Open: http://<server-ip>:3000
+```
+
+For external HTTPS access, enter a Cloudflare Tunnel token in **Settings (⚙️) → External Access** — the `cloudflared` container starts automatically.
 
 ---
 
 ## 早見表
 
-### CLI モード（共通手順）
+### CLI モード
 
 ```bash
 # 1. CLI インストール
-uv tool install benkyo      # または: pipx install benkyo
+uv tool install benkyo        # または: pipx install benkyo
 
-# 2. Claude Code でスキルをインストール
+# 2. スキルをインストール（Claude Code 内で）
 /plugin marketplace add youseiushida/benkyo
 /plugin install benkyo
-
-# 3. 教材を用意して開始
-# Claude Code を起動し、教材ファイルを共有して話しかけるだけ
 ```
 
 ### Web クライアント（Docker）
 
 ```bash
-# docker compose up 一発で起動
 docker compose up -d
-
 # ブラウザで http://<サーバーIP>:3000 にアクセス
 ```
 
-詳しいセットアップ手順（OS 別の前提条件インストール等）は各 OS ガイドを参照してください。
+外出先から HTTPS でアクセスするには **設定（⚙️）→ 外部アクセス設定** で Cloudflare Tunnel トークンを入力してください。`cloudflared` コンテナが自動起動します。
