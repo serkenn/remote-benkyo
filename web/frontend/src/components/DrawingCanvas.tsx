@@ -143,6 +143,10 @@ export default function DrawingCanvas({ onClose }: Props) {
         e.pointerType === "pen" ? Math.max(0.1, e.pressure || 0.5) : 0.5;
       const cur = pt(e);
 
+      // capture as local const so TypeScript keeps the non-null narrowing
+      // through subsequent function calls and branches
+      const fromPt = last.current;
+
       // use getCoalescedEvents for smoother Apple Pencil strokes
       if (e.nativeEvent && "getCoalescedEvents" in e.nativeEvent) {
         const coalesced = (
@@ -163,7 +167,7 @@ export default function DrawingCanvas({ onClose }: Props) {
           last.current = cpt;
         }
       } else {
-        stroke(last.current, cur, pressure);
+        stroke(fromPt, cur, pressure);
         last.current = cur;
       }
     },
