@@ -14,8 +14,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
+# allow web/frontend/src/lib (JS source, not Python venv)
+!web/frontend/src/lib/
 parts/
 sdist/
 var/
