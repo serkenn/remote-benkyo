@@ -1,8 +1,8 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-COPY web/frontend/package.json web/frontend/package-lock.json* ./
-RUN npm ci --legacy-peer-deps
+COPY web/frontend/package.json ./
+RUN npm install --legacy-peer-deps
 
 COPY web/frontend/ ./
 ENV NEXT_TELEMETRY_DISABLED=1
