@@ -87,6 +87,7 @@ export default function ProjectPage({ params }: Params) {
   }
 
   async function handleDeleteProject() {
+    if (!project) return;
     if (!confirm(`「${project.display_name}」を削除しますか？`)) return;
     await deleteProject(params.id);
     router.push("/");
