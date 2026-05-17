@@ -75,18 +75,16 @@ benkyo render --project prj1 --format dot | dot -Tpng > graph.png
 
 **β** — CLI and skills are in English; Japanese-first interactions are the only evaluated end-to-end path. The agent adapts to the learner's language at runtime.
 
-### 1. Install the CLI
+**→ [Environment-specific setup guides (macOS / Windows / Debian)](./SETUP/OVERVIEW.md)**
+
+### Quick start — CLI mode
 
 ```bash
+# 1. Install the CLI
 uv tool install benkyo   # or: pipx install benkyo
 benkyo --version
-```
 
-### 2. Install the skills
-
-**Claude Code** (first-class support):
-
-```bash
+# 2. Install the skills (in Claude Code)
 /plugin marketplace add youseiushida/benkyo
 /plugin install benkyo
 ```
@@ -95,7 +93,18 @@ Restart Claude Code — the 5 skills appear in `/help`.
 
 **Other agents** (OpenAI Codex CLI, Cursor, Gemini CLI, VS Code Copilot): the `SKILL.md` files use the open [Agent Skills](https://agentskills.io/) format. For Codex CLI, `codex plugin marketplace add youseiushida/benkyo` then install from the plugin directory. For Cursor and others, point your skill loader at `.claude/skills/benkyo-*` — the skills are agent-neutral and the repo carries `.codex-plugin/plugin.json` for Codex and `.claude/skills/` for everything else.
 
-### 3. Drop your materials and start
+### Quick start — Web client (browser / iPad)
+
+Run the full stack with a single command and open it from any device on your LAN:
+
+```bash
+docker compose up -d
+# → http://<server-ip>:3000
+```
+
+For remote access over HTTPS, enter a Cloudflare Tunnel token in the **Settings (⚙️)** page — the `cloudflared` container starts automatically and no port forwarding is needed. See [SETUP/OVERVIEW.md](./SETUP/OVERVIEW.md) for full instructions.
+
+### Drop your materials and start
 
 Put your study materials — past exams, textbook PDF, syllabus, lecture notes — in the directory you launch Claude Code from, then just describe what you want:
 
