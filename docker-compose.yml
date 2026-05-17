@@ -1,0 +1,46 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: web/backend/Dockerfile
+    environment:
+      - BENKYO_DB=/data/db.sqlite
+      - BENKYO_SETTINGS=/data/settings.json
+      - COMPOSE_FILE=/app/docker-compose.yml
+    volumes:
+      - benkyo_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/projects')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  app:
+    build:
+      context: .
+      dockerfile: web/frontend/Dockerfile
+    ports:
+      - "0.0.0.0:3000:3000"
+    environment:
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    profiles:
+      - tunnel
+    restart: unless-stopped
+    depends_on:
+      - app
+
+volumes:
+  benkyo_data:
+    driver: local
