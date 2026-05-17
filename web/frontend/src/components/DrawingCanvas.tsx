@@ -257,7 +257,7 @@ export default function DrawingCanvas({ onClose }: Props) {
               onClick={() => setColor(c.value)}
               title={c.label}
               className={`w-8 h-8 rounded-full shrink-0 transition-transform active:scale-90 ${
-                color === c.value && tool !== "eraser"
+                color === c.value
                   ? "ring-2 ring-offset-2 ring-slate-600 scale-110"
                   : ""
               }`}
