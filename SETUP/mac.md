@@ -46,7 +46,7 @@ brew install claude-code
 After launching Claude Code:
 
 ```
-/plugin marketplace add youseiushida/benkyo
+/plugin marketplace add serkenn/remote-benkyo
 /plugin install benkyo
 ```
 
@@ -77,7 +77,7 @@ Download and install [Docker Desktop for Mac](https://www.docker.com/products/do
 ### 2. Clone the repository
 
 ```bash
-git clone https://github.com/youseiushida/benkyo.git
+git clone https://github.com/serkenn/remote-benkyo.git
 cd benkyo
 ```
 

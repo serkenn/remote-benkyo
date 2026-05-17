@@ -87,13 +87,13 @@ uv tool install benkyo   # or: pipx install benkyo
 benkyo --version
 
 # 2. Install the skills (in Claude Code)
-/plugin marketplace add youseiushida/benkyo
+/plugin marketplace add serkenn/remote-benkyo
 /plugin install benkyo
 ```
 
 Restart Claude Code — the 5 skills appear in `/help`.
 
-**Other agents** (OpenAI Codex CLI, Cursor, Gemini CLI, VS Code Copilot): the `SKILL.md` files use the open [Agent Skills](https://agentskills.io/) format. For Codex CLI, `codex plugin marketplace add youseiushida/benkyo` then install from the plugin directory. For Cursor and others, point your skill loader at `.claude/skills/benkyo-*` — the skills are agent-neutral and the repo carries `.codex-plugin/plugin.json` for Codex and `.claude/skills/` for everything else.
+**Other agents** (OpenAI Codex CLI, Cursor, Gemini CLI, VS Code Copilot): the `SKILL.md` files use the open [Agent Skills](https://agentskills.io/) format. For Codex CLI, `codex plugin marketplace add serkenn/remote-benkyo` then install from the plugin directory. For Cursor and others, point your skill loader at `.claude/skills/benkyo-*` — the skills are agent-neutral and the repo carries `.codex-plugin/plugin.json` for Codex and `.claude/skills/` for everything else.
 
 ### Quick start — Web client (browser / iPad)
 

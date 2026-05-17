@@ -87,13 +87,13 @@ uv tool install benkyo   # または: pipx install benkyo
 benkyo --version
 
 # 2. スキルをインストール（Claude Code 内で）
-/plugin marketplace add youseiushida/benkyo
+/plugin marketplace add serkenn/remote-benkyo
 /plugin install benkyo
 ```
 
 Claude Code を再起動すると、`/help` に 5 つのスキルが表示されます。
 
-**その他のエージェント**（OpenAI Codex CLI・Cursor・Gemini CLI・VS Code Copilot）: `SKILL.md` ファイルはオープンな [Agent Skills](https://agentskills.io/) フォーマットを使用しています。Codex CLI では `codex plugin marketplace add youseiushida/benkyo` 後にプラグインディレクトリからインストールします。Cursor や他のエージェントでは、スキルローダーを `.claude/skills/benkyo-*` に向けてください。リポジトリには Codex 用の `.codex-plugin/plugin.json` と、それ以外向けの `.claude/skills/` が同梱されています。
+**その他のエージェント**（OpenAI Codex CLI・Cursor・Gemini CLI・VS Code Copilot）: `SKILL.md` ファイルはオープンな [Agent Skills](https://agentskills.io/) フォーマットを使用しています。Codex CLI では `codex plugin marketplace add serkenn/remote-benkyo` 後にプラグインディレクトリからインストールします。Cursor や他のエージェントでは、スキルローダーを `.claude/skills/benkyo-*` に向けてください。リポジトリには Codex 用の `.codex-plugin/plugin.json` と、それ以外向けの `.claude/skills/` が同梱されています。
 
 ### クイックスタート — Web クライアント（iPad・ブラウザから使う）
 

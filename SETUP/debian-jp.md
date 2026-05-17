@@ -65,7 +65,7 @@ claude --version
 Claude Code を起動後:
 
 ```
-/plugin marketplace add youseiushida/benkyo
+/plugin marketplace add serkenn/remote-benkyo
 /plugin install benkyo
 ```
 
@@ -105,7 +105,7 @@ docker compose version
 ### 2. リポジトリをクローン
 
 ```bash
-git clone https://github.com/youseiushida/benkyo.git
+git clone https://github.com/serkenn/remote-benkyo.git
 cd benkyo
 ```
 

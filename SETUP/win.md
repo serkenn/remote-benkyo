@@ -72,7 +72,7 @@ Node.js is required — install it from [nodejs.org](https://nodejs.org/).
 After launching Claude Code:
 
 ```
-/plugin marketplace add youseiushida/benkyo
+/plugin marketplace add serkenn/remote-benkyo
 /plugin install benkyo
 ```
 
@@ -105,7 +105,7 @@ Install [Docker Desktop for Windows](https://www.docker.com/products/docker-desk
 In PowerShell or a WSL terminal:
 
 ```bash
-git clone https://github.com/youseiushida/benkyo.git
+git clone https://github.com/serkenn/remote-benkyo.git
 cd benkyo
 ```
 

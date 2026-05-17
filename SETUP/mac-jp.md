@@ -46,7 +46,7 @@ brew install claude-code
 Claude Code を起動後:
 
 ```
-/plugin marketplace add youseiushida/benkyo
+/plugin marketplace add serkenn/remote-benkyo
 /plugin install benkyo
 ```
 
@@ -77,7 +77,7 @@ You: 数学の期末試験が 2 週間後にあります。過去問と教科書
 ### 2. リポジトリをクローン
 
 ```bash
-git clone https://github.com/youseiushida/benkyo.git
+git clone https://github.com/serkenn/remote-benkyo.git
 cd benkyo
 ```
 
