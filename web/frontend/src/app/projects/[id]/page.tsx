@@ -6,6 +6,7 @@ import {
   deleteExam,
   deleteProject,
   deleteScheduleItem,
+  fetchEvents,
   fetchProject,
   updateScheduleItem,
 } from "@/lib/api";
@@ -17,7 +18,6 @@ import useSWR from "swr";
 import GanttChart from "@/components/GanttChart";
 import ExamCalendar from "@/components/ExamCalendar";
 import DrawingCanvas from "@/components/DrawingCanvas";
-import { fetchEvents } from "@/lib/api";
 
 interface Params {
   params: { id: string };
