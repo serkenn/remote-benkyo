@@ -16,6 +16,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import GanttChart from "@/components/GanttChart";
 import ExamCalendar from "@/components/ExamCalendar";
+import DrawingCanvas from "@/components/DrawingCanvas";
 import { fetchEvents } from "@/lib/api";
 
 interface Params {
@@ -34,6 +35,7 @@ export default function ProjectPage({ params }: Params) {
   );
 
   const [tab, setTab] = useState<"overview" | "gantt" | "concepts">("overview");
+  const [showCanvas, setShowCanvas] = useState(false);
   const [addingExam, setAddingExam] = useState(false);
   const [examName, setExamName] = useState("");
   const [examDate, setExamDate] = useState("");
@@ -95,6 +97,8 @@ export default function ProjectPage({ params }: Params) {
     : [];
 
   return (
+    <>
+    {showCanvas && <DrawingCanvas onClose={() => setShowCanvas(false)} />}
     <div className="min-h-screen bg-slate-100 pb-24">
       {/* Header */}
       <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-sm border-b border-slate-200 px-4 pt-[env(safe-area-inset-top)]">
@@ -350,6 +354,17 @@ export default function ProjectPage({ params }: Params) {
           </section>
         )}
       </main>
+
+      {/* Floating draw button */}
+      <button
+        onClick={() => setShowCanvas(true)}
+        title="図を書く（Apple Pencil 対応）"
+        className="fixed bottom-6 right-6 z-30 flex items-center gap-2 bg-indigo-500 text-white rounded-2xl px-4 py-3 shadow-lg text-sm font-medium active:scale-95 transition-transform"
+        style={{ paddingBottom: `max(0.75rem, env(safe-area-inset-bottom))` }}
+      >
+        ✏️ 図を書く
+      </button>
     </div>
+    </>
   );
 }
