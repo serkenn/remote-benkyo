@@ -1,0 +1,22 @@
+# Cloudflare Tunnel configuration
+# Usage:
+#   With tunnel token (production):
+#     Set CLOUDFLARE_TUNNEL_TOKEN in .env, then:
+#     docker compose --profile tunnel up
+#
+#   Quick tunnel (testing, no account needed):
+#     docker run --rm cloudflare/cloudflared:latest tunnel --url http://host.docker.internal:80
+#
+# To create a named tunnel:
+#   1. cloudflared tunnel login
+#   2. cloudflared tunnel create benkyo
+#   3. cloudflared tunnel route dns benkyo your.domain.com
+#   4. Set the tunnel token in .env as CLOUDFLARE_TUNNEL_TOKEN
+
+tunnel: benkyo
+credentials-file: /etc/cloudflared/.cloudflared/benkyo.json
+
+ingress:
+  - hostname: your.domain.com
+    service: http://nginx:80
+  - service: http_status:404

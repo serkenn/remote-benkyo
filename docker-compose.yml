@@ -1,0 +1,67 @@
+version: '3.9'
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-benkyo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benkyo}
+      POSTGRES_DB: ${POSTGRES_DB:-benkyo}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-benkyo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-benkyo}:${POSTGRES_PASSWORD:-benkyo}@db:5432/${POSTGRES_DB:-benkyo}
+      WORKSPACES_DIR: /app/workspaces
+      UPLOADS_DIR: /app/uploads
+      SECRET_KEY: ${SECRET_KEY:-changeme}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - benkyo-workspaces:/app/workspaces
+      - canvas-uploads:/app/uploads
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ""
+    depends_on:
+      - api
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - nginx
+    profiles:
+      - tunnel
+
+volumes:
+  postgres-data:
+  benkyo-workspaces:
+  canvas-uploads:
