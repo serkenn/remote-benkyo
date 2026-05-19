@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
     npm install -g @anthropic-ai/claude-code && \
+    node $(npm root -g)/@anthropic-ai/claude-code/install.cjs && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir \
