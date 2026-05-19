@@ -61,12 +61,11 @@ export const api = {
     async status(): Promise<{ authenticated: boolean }> {
       return request('/api/auth/status')
     },
-    async setToken(token: string): Promise<{ ok: boolean }> {
-      return request('/api/auth/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
-      })
+    async startLogin(): Promise<{ status: string; url: string | null }> {
+      return request('/api/auth/start', { method: 'POST' })
+    },
+    async pollLogin(): Promise<{ authenticated: boolean; status?: string; error?: string }> {
+      return request('/api/auth/poll')
     },
     async removeToken(): Promise<{ ok: boolean }> {
       return request('/api/auth/token', { method: 'DELETE' })
