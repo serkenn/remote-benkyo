@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Single-user OAuth flow state (in-memory)
-_state: dict = {"status": "idle", "url": None}
+_state: dict = {"status": "idle", "url": None, "proc": None}
 
 
 # ---------------------------------------------------------------------------
@@ -33,7 +34,7 @@ def _claude_home() -> Path:
 async def _find_stored_credentials() -> Optional[str]:
     """Try multiple strategies to find the Claude API key after OAuth."""
 
-    # Strategy 1: claude config get api_key
+    # Strategy 1: claude config get api_key / claude auth token
     for cmd in [
         ["claude", "config", "get", "api_key"],
         ["claude", "auth", "token"],
@@ -72,7 +73,7 @@ async def _find_stored_credentials() -> Optional[str]:
         except Exception:
             pass
 
-    # Strategy 3: env var written by claude
+    # Strategy 3: env var
     env_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if env_key.startswith("sk-ant-"):
         return env_key
@@ -100,16 +101,16 @@ async def _run_oauth_flow() -> None:
     env = {**os.environ, "BROWSER": "none", "ANTHROPIC_NO_BROWSER": "1"}
     url_re = re.compile(r"https://\S+")
 
-    # Try subcommands in order
     for cmd in [["claude", "auth", "login"], ["claude", "login"]]:
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
-                stdin=asyncio.subprocess.DEVNULL,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 env=env,
             )
+            _state["proc"] = proc
 
             async for raw in proc.stdout:
                 line = raw.decode("utf-8", errors="replace").strip()
@@ -120,6 +121,7 @@ async def _run_oauth_flow() -> None:
                     _state["status"] = "pending"
 
             await proc.wait()
+            _state["proc"] = None
             if proc.returncode == 0:
                 _state["status"] = "complete"
                 return
@@ -146,13 +148,12 @@ async def start_login() -> dict:
     """Start Claude OAuth login flow. Returns the URL the user should visit."""
     global _state
 
-    # Return existing pending URL if available
     if _state["status"] == "pending" and _state["url"]:
         return {"status": "pending", "url": _state["url"]}
     if _state["status"] == "complete":
         return {"status": "complete", "url": None}
 
-    _state = {"status": "starting", "url": None}
+    _state = {"status": "starting", "url": None, "proc": None}
     asyncio.create_task(_run_oauth_flow())
 
     # Wait up to 20 s for the URL to appear
@@ -162,6 +163,26 @@ async def start_login() -> dict:
             break
 
     return {"status": _state["status"], "url": _state["url"]}
+
+
+class CodePayload(BaseModel):
+    code: str
+
+
+@router.post("/code")
+async def submit_code(payload: CodePayload) -> dict:
+    """Submit the authentication code shown in the browser back to the claude process."""
+    global _state
+    proc = _state.get("proc")
+    if proc is None or proc.stdin is None:
+        return {"ok": False, "error": "No active login process"}
+    try:
+        proc.stdin.write((payload.code.strip() + "\n").encode())
+        await proc.stdin.drain()
+        return {"ok": True}
+    except Exception as exc:
+        logger.exception("[claude-auth] stdin write failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
 
 
 @router.get("/poll")
@@ -191,5 +212,5 @@ async def delete_token(db: AsyncSession = Depends(get_db)) -> OkResponse:
     if config:
         await db.delete(config)
         await db.commit()
-    _state = {"status": "idle", "url": None}
+    _state = {"status": "idle", "url": None, "proc": None}
     return OkResponse(ok=True)

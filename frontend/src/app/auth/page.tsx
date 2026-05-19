@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { isAuthenticated, setToken } from '@/lib/auth'
-import { ExternalLink, Loader2, CheckCircle2, Copy, Check } from 'lucide-react'
+import { ExternalLink, Loader2, CheckCircle2, Copy, Check, Send } from 'lucide-react'
 
 type Phase = 'idle' | 'starting' | 'pending' | 'polling' | 'done' | 'error'
 
@@ -13,6 +13,9 @@ export default function AuthPage() {
   const [loginUrl, setLoginUrl] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [authCode, setAuthCode] = useState('')
+  const [codeSent, setCodeSent] = useState(false)
+  const [codeSending, setCodeSending] = useState(false)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -26,6 +29,8 @@ export default function AuthPage() {
     setPhase('starting')
     setErrorMsg(null)
     setLoginUrl(null)
+    setAuthCode('')
+    setCodeSent(false)
 
     try {
       const res = await fetch('/api/auth/start', { method: 'POST' })
@@ -61,7 +66,6 @@ export default function AuthPage() {
       const data = await res.json()
       if (data.authenticated) {
         if (pollRef.current) clearInterval(pollRef.current)
-        // Store a sentinel in localStorage so the app knows we're authenticated
         setToken('claude-oauth')
         setPhase('done')
         setTimeout(() => router.push('/subjects'), 800)
@@ -76,6 +80,24 @@ export default function AuthPage() {
     await navigator.clipboard.writeText(loginUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleSubmitCode() {
+    if (!authCode.trim()) return
+    setCodeSending(true)
+    try {
+      await fetch('/api/auth/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: authCode.trim() }),
+      })
+      setCodeSent(true)
+      if (pollRef.current === null) startPolling()
+    } catch {
+      // ignore
+    } finally {
+      setCodeSending(false)
+    }
   }
 
   return (
@@ -115,14 +137,15 @@ export default function AuthPage() {
           </div>
         )}
 
-        {/* Pending / Polling — show URL */}
+        {/* Pending / Polling — show URL + code input */}
         {(phase === 'pending' || phase === 'polling') && loginUrl && (
-          <div className="space-y-5">
+          <div className="space-y-4">
+            {/* URL card */}
             <div className="px-4 py-4 rounded-xl bg-slate-800 border border-slate-700">
               <p className="text-sm font-medium text-slate-200 mb-3">
-                以下の URL をブラウザで開いて、Claudeアカウントでログインしてください。
+                ① 以下の URL をブラウザで開いて、Claudeアカウントでログインしてください。
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mb-3">
                 <a
                   href={loginUrl}
                   target="_blank"
@@ -145,7 +168,7 @@ export default function AuthPage() {
                 href={loginUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 flex items-center justify-center gap-2 w-full py-2.5 rounded-lg
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg
                            bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium
                            transition-colors min-h-[44px]"
               >
@@ -154,10 +177,47 @@ export default function AuthPage() {
               </a>
             </div>
 
+            {/* Auth code input */}
+            <div className="px-4 py-4 rounded-xl bg-slate-800 border border-slate-700 space-y-3">
+              <p className="text-sm font-medium text-slate-200">
+                ② ブラウザに表示された認証コードを貼り付けてください。
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={authCode}
+                  onChange={e => setAuthCode(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSubmitCode()}
+                  placeholder="認証コードを貼り付け..."
+                  disabled={codeSent}
+                  className="flex-1 px-3 py-2 rounded-lg bg-slate-700 border border-slate-600
+                             text-slate-100 text-sm placeholder-slate-500
+                             focus:outline-none focus:border-indigo-500
+                             disabled:opacity-50"
+                />
+                <button
+                  onClick={handleSubmitCode}
+                  disabled={!authCode.trim() || codeSent || codeSending}
+                  className="flex-shrink-0 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500
+                             text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {codeSending
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : codeSent
+                      ? <Check className="w-4 h-4 text-emerald-400" />
+                      : <Send className="w-4 h-4" />}
+                </button>
+              </div>
+              {codeSent && (
+                <p className="text-xs text-emerald-400">送信しました。認証完了を待っています...</p>
+              )}
+            </div>
+
+            {/* Polling indicator */}
             <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700">
               <Loader2 className="w-4 h-4 text-orange-400 animate-spin flex-shrink-0" />
               <p className="text-xs text-slate-400">
-                ログイン完了を待っています... ブラウザで認証後、自動でログインされます。
+                認証完了を確認中... 自動でログインされます。
               </p>
             </div>
 

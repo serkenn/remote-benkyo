@@ -67,6 +67,13 @@ export const api = {
     async pollLogin(): Promise<{ authenticated: boolean; status?: string; error?: string }> {
       return request('/api/auth/poll')
     },
+    async submitCode(code: string): Promise<{ ok: boolean; error?: string }> {
+      return request('/api/auth/code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+    },
     async removeToken(): Promise<{ ok: boolean }> {
       return request('/api/auth/token', { method: 'DELETE' })
     },
