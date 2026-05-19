@@ -32,12 +32,12 @@ def _claude_home() -> Path:
 
 
 async def _find_stored_credentials() -> Optional[str]:
-    """Try multiple strategies to find the Claude API key after OAuth."""
+    """Try multiple strategies to find the Claude token after OAuth."""
 
-    # Strategy 1: claude config get api_key / claude auth token
+    # Strategy 1: claude auth token (most direct — works after OAuth login)
     for cmd in [
-        ["claude", "config", "get", "api_key"],
         ["claude", "auth", "token"],
+        ["claude", "config", "get", "api_key"],
     ]:
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -48,34 +48,50 @@ async def _find_stored_credentials() -> Optional[str]:
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
             if proc.returncode == 0:
                 key = out.decode().strip()
-                if key.startswith("sk-ant-"):
+                # Accept any non-empty token — OAuth tokens don't start with sk-ant-
+                if key and len(key) > 10 and not key.startswith("null"):
+                    logger.info("[claude-auth] Got token via %s", cmd[0])
                     return key
         except Exception:
             pass
 
-    # Strategy 2: scan credential files
+    # Strategy 2: scan credential files (top-level and nested OAuth fields)
     candidates = [
-        _claude_home() / "credentials.json",
         _claude_home() / ".credentials.json",
+        _claude_home() / "credentials.json",
         _claude_home() / "config.json",
         Path("/root/.config/anthropic/credentials.json"),
         Path(os.environ.get("HOME", "/root")) / ".config" / "anthropic" / "credentials.json",
     ]
+    top_level_fields = ["api_key", "ANTHROPIC_API_KEY", "token", "access_token", "apiKey"]
+    nested_oauth_keys = ["oauth", "claudeAiOauth", "oauthAccount"]
+
     for path in candidates:
         if not path.exists():
             continue
         try:
             data = json.loads(path.read_text())
-            for field in ["api_key", "ANTHROPIC_API_KEY", "token", "access_token", "apiKey"]:
+            logger.info("[claude-auth] Scanning %s, keys: %s", path, list(data.keys())[:10])
+            # Top-level token fields
+            for field in top_level_fields:
                 val = data.get(field, "")
                 if val and isinstance(val, str) and len(val) > 10:
                     return val
+            # Nested OAuth objects
+            for key in nested_oauth_keys:
+                obj = data.get(key, {})
+                if isinstance(obj, dict):
+                    for sub in ["accessToken", "token", "access_token"]:
+                        val = obj.get(sub, "")
+                        if val and isinstance(val, str) and len(val) > 10:
+                            logger.info("[claude-auth] Found token in %s.%s", key, sub)
+                            return val
         except Exception:
             pass
 
     # Strategy 3: env var
     env_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if env_key.startswith("sk-ant-"):
+    if env_key and len(env_key) > 10:
         return env_key
 
     return None

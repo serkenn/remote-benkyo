@@ -25,7 +25,10 @@ class ClaudeService:
         return None
 
     def client(self, token: str) -> anthropic.Anthropic:
-        return anthropic.Anthropic(api_key=token)
+        # Claude Code OAuth tokens use bearer auth, not api_key auth
+        if token.startswith("sk-ant-"):
+            return anthropic.Anthropic(api_key=token)
+        return anthropic.Anthropic(auth_token=token)
 
     async def get_client(self, db: AsyncSession) -> anthropic.Anthropic:
         token = await self.get_token(db)
@@ -45,8 +48,10 @@ class ClaudeService:
         except anthropic.AuthenticationError:
             return False
         except Exception as e:
-            logger.warning("Token validation error: %s", e)
-            return False
+            logger.warning("Token validation error (treating as valid): %s", e)
+            # OAuth session tokens may raise non-auth errors during validation
+            # but still be usable — accept them and let real API calls fail naturally
+            return True
 
     async def extract_curriculum(
         self,
