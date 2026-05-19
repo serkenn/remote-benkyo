@@ -24,6 +24,7 @@ export default function SubjectDetailPage() {
   const [activeTab, setActiveTab] = useState<Tab>('materials')
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
   const [initializing, setInitializing] = useState(false)
   const [initResult, setInitResult] = useState<{ concepts: number; problems: number } | null>(null)
   const [instructions, setInstructions] = useState('')
@@ -62,30 +63,37 @@ export default function SubjectDetailPage() {
     loadData()
   }, [router, loadData])
 
-  async function handleFileUpload(file: File) {
+  async function handleFilesUpload(fileList: FileList | File[]) {
+    const files = Array.from(fileList)
+    if (files.length === 0) return
     setUploading(true)
-    try {
-      await api.files.upload(id, file)
-      const updated = await api.files.list(id)
-      setFiles(updated)
-    } catch (err) {
-      setError('ファイルのアップロードに失敗しました')
-    } finally {
-      setUploading(false)
+    setUploadProgress({ current: 0, total: files.length })
+    let failed = 0
+    for (let i = 0; i < files.length; i++) {
+      setUploadProgress({ current: i + 1, total: files.length })
+      try {
+        await api.files.upload(id, files[i])
+      } catch {
+        failed++
+      }
     }
+    const updated = await api.files.list(id)
+    setFiles(updated)
+    setUploading(false)
+    setUploadProgress(null)
+    if (failed > 0) setError(`${failed} 件のアップロードに失敗しました`)
   }
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) handleFileUpload(file)
+    if (e.target.files && e.target.files.length > 0) handleFilesUpload(e.target.files)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setIsDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) handleFileUpload(file)
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0)
+      handleFilesUpload(e.dataTransfer.files)
   }
 
   function handleDragOver(e: React.DragEvent) {
@@ -252,6 +260,7 @@ export default function SubjectDetailPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  multiple
                   className="hidden"
                   accept=".pdf,.png,.jpg,.jpeg,.txt,.md"
                   onChange={handleFileInputChange}
@@ -259,7 +268,11 @@ export default function SubjectDetailPage() {
                 {uploading ? (
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-                    <p className="text-sm text-slate-400">アップロード中...</p>
+                    <p className="text-sm text-slate-400">
+                      {uploadProgress
+                        ? `アップロード中... ${uploadProgress.current} / ${uploadProgress.total}`
+                        : 'アップロード中...'}
+                    </p>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center gap-2">
