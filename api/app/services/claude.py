@@ -45,19 +45,24 @@ class ClaudeService:
 
     async def validate_token(self, creds: str) -> bool:
         """Validate by running a minimal claude command."""
-        if creds == _AUTH_SENTINEL:
-            return True
-        # For file-based credentials, verify by running claude
         try:
             proc = await asyncio.create_subprocess_exec(
-                "claude", "--print", "-p", "Reply with just the word: ok",
+                "claude",
+                "--dangerously-skip-permissions",
+                "--output-format", "text",
                 "--model", MODEL,
+                "-p", "Reply with the single word: ok",
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            _, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            return proc.returncode == 0
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=45)
+            ok = proc.returncode == 0
+            if ok:
+                logger.info("[claude-auth] validate_token OK: %r", stdout.decode().strip()[:50])
+            else:
+                logger.warning("[claude-auth] validate_token failed: %s", stderr.decode().strip()[:200])
+            return ok
         except Exception as e:
             logger.warning("validate_token failed: %s", e)
             return False
@@ -80,8 +85,12 @@ class ClaudeService:
         return await self._run_text(prompt, system, timeout)
 
     async def _run_text(self, prompt: str, system: Optional[str], timeout: int) -> str:
+        # -p is the non-interactive print flag; --print is an alias.
+        # --dangerously-skip-permissions prevents Claude Code from hanging in
+        # headless Docker environments waiting for permission confirmations.
         cmd = [
-            "claude", "--print",
+            "claude",
+            "--dangerously-skip-permissions",
             "--output-format", "text",
             "--model", MODEL,
         ]
@@ -89,6 +98,7 @@ class ClaudeService:
             cmd += ["--system", system]
         cmd += ["-p", prompt]
 
+        logger.debug("Running claude text: model=%s prompt_len=%d", MODEL, len(prompt))
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.DEVNULL,
@@ -97,7 +107,9 @@ class ClaudeService:
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         if proc.returncode != 0:
-            raise RuntimeError(f"claude CLI error: {stderr.decode().strip()[:500]}")
+            err = stderr.decode().strip()
+            logger.error("claude CLI error (rc=%d): %s", proc.returncode, err[:500])
+            raise RuntimeError(f"claude CLI error: {err[:500]}")
         return stdout.decode().strip()
 
     async def _run_with_image(
@@ -117,7 +129,8 @@ class ClaudeService:
         try:
             # Try --image flag (available in some Claude Code versions)
             cmd = [
-                "claude", "--print",
+                "claude",
+                "--dangerously-skip-permissions",
                 "--output-format", "text",
                 "--model", MODEL,
                 "--image", tmp_path,
@@ -171,7 +184,8 @@ class ClaudeService:
         stdin_data = (json.dumps(msg) + "\n").encode()
 
         cmd = [
-            "claude", "--print",
+            "claude",
+            "--dangerously-skip-permissions",
             "--output-format", "text",
             "--input-format", "stream-json",
             "--model", MODEL,
@@ -233,7 +247,7 @@ Rules:
 - edges represent prerequisite relationships (from=prerequisite, to=dependent concept)
 - Return ONLY the JSON, no markdown fences or extra text
 """
-        raw = await self._run(prompt, timeout=120)
+        raw = await self._run(prompt, timeout=300)
 
         # Strip markdown fences if present
         if raw.startswith("```"):
