@@ -136,6 +136,30 @@ async def upload_file(
     )
 
 
+@router.delete("/{subject_id}/files/{file_id}", response_model=OkResponse)
+async def delete_file(
+    subject_id: str,
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> OkResponse:
+    await _get_subject_or_404(db, subject_id)
+    result = await db.execute(
+        select(UploadedFile).where(
+            UploadedFile.id == uuid.UUID(file_id),
+            UploadedFile.subject_id == uuid.UUID(subject_id),
+        )
+    )
+    db_file = result.scalar_one_or_none()
+    if not db_file:
+        raise HTTPException(status_code=404, detail="File not found")
+    storage_path = Path(db_file.storage_path)
+    await db.delete(db_file)
+    await db.commit()
+    if storage_path.exists():
+        storage_path.unlink(missing_ok=True)
+    return OkResponse(ok=True)
+
+
 @router.get("/{subject_id}/files", response_model=list[FileInfo])
 async def list_files(
     subject_id: str,
@@ -192,21 +216,37 @@ async def init_subject(
             logger.warning("File not found: %s", path)
             continue
 
-        # Detect if it's an image
+        # Detect file type
         suffix = path.suffix.lower()
         is_image = suffix in (".png", ".jpg", ".jpeg", ".gif", ".webp")
+        is_pdf = suffix == ".pdf"
 
         if is_image:
             async with aiofiles.open(path, "rb") as fp:
                 content = await fp.read()
             files_content.append({"filename": f.filename, "content": content, "is_image": True})
+        elif is_pdf:
+            try:
+                import pypdf
+                text_parts = []
+                reader = pypdf.PdfReader(str(path))
+                for page in reader.pages:
+                    text_parts.append(page.extract_text() or "")
+                content = "\n".join(text_parts)
+                if not content.strip():
+                    content = f"[PDF file: {f.filename} — text could not be extracted]"
+                files_content.append({"filename": f.filename, "content": content, "is_image": False})
+            except Exception as e:
+                logger.error("Failed to read PDF %s: %s", path, e)
+                files_content.append({
+                    "filename": f.filename,
+                    "content": f"[PDF file: {f.filename}]",
+                    "is_image": False,
+                })
         else:
             try:
                 async with aiofiles.open(path, "r", encoding="utf-8", errors="replace") as fp:
                     content = await fp.read()
-                # If instructions are provided, append them context
-                if body.instructions and not files_content:
-                    content = f"[Additional instructions: {body.instructions}]\n\n{content}"
                 files_content.append({"filename": f.filename, "content": content, "is_image": False})
             except Exception as e:
                 logger.error("Failed to read file %s: %s", path, e)

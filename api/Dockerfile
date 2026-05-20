@@ -20,7 +20,8 @@ RUN pip install --no-cache-dir \
     python-multipart \
     aiofiles \
     pydantic-settings \
-    greenlet
+    greenlet \
+    pypdf
 
 COPY app/ ./app/
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

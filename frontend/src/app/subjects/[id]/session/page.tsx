@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
   ArrowLeft, Send, Eraser, MessageSquare, X,
-  Loader2, ChevronDown, ChevronUp, RefreshCw
+  Loader2, ChevronDown, ChevronUp, RefreshCw, Download
 } from 'lucide-react'
 import { isAuthenticated } from '@/lib/auth'
 import { api, type Problem, type Subject } from '@/lib/api'
@@ -156,6 +156,40 @@ export default function SessionPage() {
     }
   }
 
+  async function handleExportPng() {
+    if (!editorRef.current) return
+    const editor = editorRef.current
+    const shapeIds = editor.getCurrentPageShapeIds()
+
+    let pngBlob: Blob
+    if (shapeIds.size === 0) {
+      const canvas = document.createElement('canvas')
+      canvas.width = 2048
+      canvas.height = 1536
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      pngBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png')
+      })
+    } else {
+      const { exportToBlob } = await import('@tldraw/tldraw')
+      pngBlob = await exportToBlob({
+        editor,
+        ids: [...shapeIds],
+        format: 'png',
+        opts: { background: true, scale: 2 },
+      })
+    }
+
+    const url = URL.createObjectURL(pngBlob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${problem?.name ?? 'canvas'}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function handleEditorReady(editor: Editor) {
     editorRef.current = editor
   }
@@ -288,6 +322,16 @@ export default function SessionPage() {
             >
               <Eraser className="w-4 h-4" />
               <span className="hidden sm:inline">消去</span>
+            </button>
+            <button
+              onClick={handleExportPng}
+              title="GoodNotesなどにインポートできるPNGを保存"
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-slate-800
+                         hover:bg-slate-700 text-slate-300 text-sm font-medium transition-colors
+                         min-h-[44px] border border-slate-700"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">PNG保存</span>
             </button>
           </div>
 

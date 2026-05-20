@@ -110,6 +110,9 @@ export const api = {
         body: formData,
       })
     },
+    async delete(subjectId: string, fileId: string): Promise<{ ok: boolean }> {
+      return request(`/api/subjects/${subjectId}/files/${fileId}`, { method: 'DELETE' })
+    },
   },
 
   study: {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
   ArrowLeft, Upload, Trash2, FileText, Loader2,
-  Play, Network, BookOpen, X, CheckCircle2
+  Play, Network, BookOpen, X, CheckCircle2, AlertCircle
 } from 'lucide-react'
 import { isAuthenticated } from '@/lib/auth'
 import { api, type Subject, type FileInfo } from '@/lib/api'
@@ -105,6 +105,15 @@ export default function SubjectDetailPage() {
     setIsDragging(false)
   }
 
+  async function handleDeleteFile(fileId: string) {
+    try {
+      await api.files.delete(id, fileId)
+      setFiles(prev => prev.filter(f => f.id !== fileId))
+    } catch {
+      setError('ファイルの削除に失敗しました')
+    }
+  }
+
   async function handleInit() {
     setInitializing(true)
     setError(null)
@@ -114,7 +123,8 @@ export default function SubjectDetailPage() {
       const updated = await api.subjects.get(id)
       setSubject(updated)
     } catch (err) {
-      setError('初期化に失敗しました')
+      const msg = err instanceof Error ? err.message : '初期化に失敗しました'
+      setError(`初期化に失敗しました: ${msg}`)
     } finally {
       setInitializing(false)
     }
@@ -306,6 +316,14 @@ export default function SubjectDetailPage() {
                           {new Date(file.uploaded_at).toLocaleDateString('ja-JP')}
                         </p>
                       </div>
+                      <button
+                        onClick={() => handleDeleteFile(file.id)}
+                        className="flex-shrink-0 p-1.5 rounded-lg text-slate-500 hover:text-red-400
+                                   hover:bg-red-950/50 transition-colors"
+                        title="削除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
