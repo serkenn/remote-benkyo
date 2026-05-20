@@ -6,6 +6,9 @@ import re
 from pathlib import Path
 from typing import Optional
 
+# Matches any Anthropic-style token: sk-ant-* or claude-* bearer tokens (ASCII, no whitespace)
+_TOKEN_RE = re.compile(r'sk-ant-[A-Za-z0-9_\-]+|[A-Za-z0-9_\-]{40,}')
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,11 +50,20 @@ async def _find_stored_credentials() -> Optional[str]:
             )
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
             if proc.returncode == 0:
-                key = out.decode().strip()
-                # Accept any non-empty token — OAuth tokens don't start with sk-ant-
-                if key and len(key) > 10 and not key.startswith("null"):
-                    logger.info("[claude-auth] Got token via %s", cmd[0])
-                    return key
+                raw = out.decode("utf-8", errors="replace").strip()
+                logger.info("[claude-auth] %s raw output: %r", cmd[0], raw[:200])
+                # Extract just the token — output may include decorative text like
+                # "sk-ant-oat01-XXX — Session token for claude.ai"
+                m = re.search(r'sk-ant-[A-Za-z0-9_\-]+', raw)
+                if m:
+                    logger.info("[claude-auth] Extracted sk-ant- token via %s", cmd[0])
+                    return m.group()
+                # Fallback: take first ASCII-only word on first line
+                first_word = raw.split()[0] if raw.split() else ""
+                ascii_word = first_word.encode("ascii", errors="ignore").decode()
+                if ascii_word and len(ascii_word) > 20 and ascii_word not in ("null", "None", "undefined"):
+                    logger.info("[claude-auth] Using first-word token via %s", cmd[0])
+                    return ascii_word
         except Exception:
             pass
 
@@ -72,18 +84,21 @@ async def _find_stored_credentials() -> Optional[str]:
         try:
             data = json.loads(path.read_text())
             logger.info("[claude-auth] Scanning %s, keys: %s", path, list(data.keys())[:10])
+            def _ascii_token(v: str) -> str:
+                return v.encode("ascii", errors="ignore").decode().strip()
+
             # Top-level token fields
             for field in top_level_fields:
-                val = data.get(field, "")
-                if val and isinstance(val, str) and len(val) > 10:
+                val = _ascii_token(data.get(field, "") or "")
+                if val and len(val) > 10:
                     return val
             # Nested OAuth objects
             for key in nested_oauth_keys:
                 obj = data.get(key, {})
                 if isinstance(obj, dict):
                     for sub in ["accessToken", "token", "access_token"]:
-                        val = obj.get(sub, "")
-                        if val and isinstance(val, str) and len(val) > 10:
+                        val = _ascii_token(obj.get(sub, "") or "")
+                        if val and len(val) > 10:
                             logger.info("[claude-auth] Found token in %s.%s", key, sub)
                             return val
         except Exception:
