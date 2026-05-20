@@ -30,6 +30,7 @@ services:
     volumes:
       - benkyo-workspaces:/app/workspaces
       - canvas-uploads:/app/uploads
+      - /home/benkyo/.claude/.credentials.json:/tmp/.host-claude-credentials:ro
 
   frontend:
     build: ./frontend
