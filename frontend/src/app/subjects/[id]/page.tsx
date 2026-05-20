@@ -124,6 +124,10 @@ export default function SubjectDetailPage() {
       setSubject(updated)
     } catch (err) {
       const msg = err instanceof Error ? err.message : '初期化に失敗しました'
+      if (msg.includes('401')) {
+        router.replace('/auth')
+        return
+      }
       setError(`初期化に失敗しました: ${msg}`)
     } finally {
       setInitializing(false)

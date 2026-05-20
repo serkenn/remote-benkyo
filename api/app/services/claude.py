@@ -19,6 +19,10 @@ _AUTH_SENTINEL = "claude-code-auth"
 _CLAUDE_HOME = "/home/claudeuser"
 
 
+class ClaudeNotAuthenticatedError(RuntimeError):
+    """Raised when the claude CLI reports it is not logged in."""
+
+
 def _claude_env() -> dict:
     """Subprocess env with HOME forced to claudeuser's home directory.
 
@@ -53,6 +57,17 @@ class ClaudeService:
         if not token:
             raise RuntimeError("Not authenticated with Claude Code")
         return token
+
+    async def clear_auth(self, db: AsyncSession) -> None:
+        """Remove the auth sentinel from DB (called when claude reports not logged in)."""
+        result = await db.execute(
+            select(AppConfig).where(AppConfig.key == "anthropic_api_key")
+        )
+        config = result.scalar_one_or_none()
+        if config:
+            await db.delete(config)
+            await db.commit()
+        logger.info("[claude-auth] Auth sentinel cleared from DB (claude not logged in)")
 
     async def validate_token(self, creds: str) -> bool:
         """Validate by running a minimal claude command."""
@@ -129,6 +144,8 @@ class ClaudeService:
             out = stdout.decode().strip()
             detail = err or out or "(no output)"
             logger.error("claude CLI error (rc=%d) stderr=%r stdout=%r", proc.returncode, err[:300], out[:300])
+            if "Not logged in" in detail or "Please run /login" in detail:
+                raise ClaudeNotAuthenticatedError(detail)
             raise RuntimeError(f"claude CLI error: {detail[:500]}")
         return stdout.decode().strip()
 
@@ -227,7 +244,10 @@ class ClaudeService:
         if proc.returncode != 0:
             err = stderr.decode().strip()
             out = stdout.decode().strip()
-            raise RuntimeError(f"claude stream-json error: {(err or out or '(no output)')[:500]}")
+            detail = err or out or "(no output)"
+            if "Not logged in" in detail or "Please run /login" in detail:
+                raise ClaudeNotAuthenticatedError(detail)
+            raise RuntimeError(f"claude stream-json error: {detail[:500]}")
         return stdout.decode().strip()
 
     # ------------------------------------------------------------------

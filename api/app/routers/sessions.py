@@ -13,7 +13,7 @@ from ..models import Subject as SubjectModel, Answer
 from ..schemas import AnswerResponse, ChatRequest, ChatResponse, Problem
 from ..config import settings
 from ..services.benkyo import benkyo_service
-from ..services.claude import claude_service
+from ..services.claude import claude_service, ClaudeNotAuthenticatedError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["sessions"])
@@ -102,7 +102,11 @@ async def submit_answer(
         problem_dict = {"id": problem_id, "name": "Problem", "statement": ""}
 
     # Evaluate via Claude Code subprocess
-    evaluation = await claude_service.evaluate_answer(None, problem_dict, canvas_bytes)
+    try:
+        evaluation = await claude_service.evaluate_answer(None, problem_dict, canvas_bytes)
+    except ClaudeNotAuthenticatedError:
+        await claude_service.clear_auth(db)
+        raise HTTPException(status_code=401, detail="Claude認証が期限切れです — /auth で再ログインしてください")
 
     # Save answer to DB
     answer = Answer(
@@ -158,12 +162,16 @@ async def chat(
         if problem_dict:
             subject_context += f"\nCurrent problem: {problem_dict.get('name', '')}\n{problem_dict.get('statement', '')}"
 
-    response_text = await claude_service.chat(
-        _client=None,
-        subject_context=subject_context,
-        history=[],
-        message=body.message,
-    )
+    try:
+        response_text = await claude_service.chat(
+            _client=None,
+            subject_context=subject_context,
+            history=[],
+            message=body.message,
+        )
+    except ClaudeNotAuthenticatedError:
+        await claude_service.clear_auth(db)
+        raise HTTPException(status_code=401, detail="Claude認証が期限切れです — /auth で再ログインしてください")
 
     return ChatResponse(response=response_text)
 

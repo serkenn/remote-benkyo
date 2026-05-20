@@ -117,6 +117,11 @@ export default function SessionPage() {
       })
       setFeedbackCollapsed(false)
     } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('401')) {
+        router.replace('/auth')
+        return
+      }
       console.error('Submit failed:', err)
     } finally {
       setSubmitting(false)
@@ -234,7 +239,12 @@ export default function SessionPage() {
       try {
         const result = await api.study.chat(id, message, problem?.id)
         setChatMessages(prev => [...prev, { role: 'assistant', content: result.response }])
-      } catch {
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : ''
+        if (msg.includes('401')) {
+          router.replace('/auth')
+          return
+        }
         setChatMessages(prev => [
           ...prev,
           { role: 'assistant', content: 'エラーが発生しました。もう一度お試しください。' },

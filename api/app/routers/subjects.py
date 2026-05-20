@@ -22,7 +22,7 @@ from ..schemas import (
 )
 from ..config import settings
 from ..services.benkyo import benkyo_service
-from ..services.claude import claude_service
+from ..services.claude import claude_service, ClaudeNotAuthenticatedError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
@@ -261,7 +261,11 @@ async def init_subject(
         })
 
     # Extract curriculum via Claude Code subprocess
-    curriculum = await claude_service.extract_curriculum(None, files_content)
+    try:
+        curriculum = await claude_service.extract_curriculum(None, files_content)
+    except ClaudeNotAuthenticatedError:
+        await claude_service.clear_auth(db)
+        raise HTTPException(status_code=401, detail="Claude認証が期限切れです — /auth で再ログインしてください")
 
     concepts = curriculum.get("concepts", [])
     problems = curriculum.get("problems", [])
