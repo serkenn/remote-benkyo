@@ -191,11 +191,9 @@ async def init_subject(
 ) -> InitResponse:
     subject = await _get_subject_or_404(db, subject_id)
 
-    # Get Claude client
-    token = await claude_service.get_token(db)
-    if not token:
-        raise HTTPException(status_code=401, detail="Anthropic API token not configured")
-    client = claude_service.client(token)
+    # Verify Claude Code auth
+    if not await claude_service.get_token(db):
+        raise HTTPException(status_code=401, detail="Not authenticated with Claude Code — please log in")
 
     # Load all uploaded files
     result = await db.execute(
@@ -262,8 +260,8 @@ async def init_subject(
             "is_image": False,
         })
 
-    # Extract curriculum via Claude
-    curriculum = await claude_service.extract_curriculum(client, files_content)
+    # Extract curriculum via Claude Code subprocess
+    curriculum = await claude_service.extract_curriculum(None, files_content)
 
     concepts = curriculum.get("concepts", [])
     problems = curriculum.get("problems", [])

@@ -80,11 +80,9 @@ async def submit_answer(
     if not subject.initialized or not subject.benkyo_project_id:
         raise HTTPException(status_code=400, detail="Subject has not been initialized yet")
 
-    # Get Claude client
-    token = await claude_service.get_token(db)
-    if not token:
-        raise HTTPException(status_code=401, detail="Anthropic API token not configured")
-    client = claude_service.client(token)
+    # Verify auth
+    if not await claude_service.get_token(db):
+        raise HTTPException(status_code=401, detail="Not authenticated with Claude Code")
 
     # Read canvas PNG
     canvas_bytes = await canvas_png.read()
@@ -101,11 +99,10 @@ async def submit_answer(
     # Get problem details from benkyo
     problem_dict = await _get_problem_dict(subject_id, problem_id)
     if not problem_dict:
-        # Fallback: create a minimal problem dict
         problem_dict = {"id": problem_id, "name": "Problem", "statement": ""}
 
-    # Evaluate via Claude Vision
-    evaluation = await claude_service.evaluate_answer(client, problem_dict, canvas_bytes)
+    # Evaluate via Claude Code subprocess
+    evaluation = await claude_service.evaluate_answer(None, problem_dict, canvas_bytes)
 
     # Save answer to DB
     answer = Answer(
@@ -152,22 +149,17 @@ async def chat(
 ) -> ChatResponse:
     subject = await _get_subject(db, subject_id)
 
-    # Get Claude client
-    token = await claude_service.get_token(db)
-    if not token:
-        raise HTTPException(status_code=401, detail="Anthropic API token not configured")
-    client = claude_service.client(token)
+    if not await claude_service.get_token(db):
+        raise HTTPException(status_code=401, detail="Not authenticated with Claude Code")
 
-    # Build subject context
     subject_context = f"Subject: {subject.name}"
     if body.problem_id:
         problem_dict = await _get_problem_dict(subject_id, body.problem_id)
         if problem_dict:
             subject_context += f"\nCurrent problem: {problem_dict.get('name', '')}\n{problem_dict.get('statement', '')}"
 
-    # Use ephemeral history (no persistent history for /chat endpoint)
     response_text = await claude_service.chat(
-        client=client,
+        _client=None,
         subject_context=subject_context,
         history=[],
         message=body.message,
@@ -200,11 +192,10 @@ async def websocket_endpoint(websocket: WebSocket, subject_id: str) -> None:
 
             token = await claude_service.get_token(db)
             if not token:
-                await websocket.send_json({"error": "Anthropic API token not configured"})
+                await websocket.send_json({"error": "Not authenticated with Claude Code"})
                 await websocket.close()
                 return
 
-        client = claude_service.client(token)
         subject_context = f"Subject: {subject.name}"
 
         # Send ready signal
@@ -232,7 +223,7 @@ async def websocket_endpoint(websocket: WebSocket, subject_id: str) -> None:
 
                 # Get response from Claude
                 response_text = await claude_service.chat(
-                    client=client,
+                    _client=None,
                     subject_context=ctx,
                     history=history,
                     message=user_message,

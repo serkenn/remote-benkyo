@@ -1,9 +1,12 @@
+import asyncio
 import base64
 import json
 import logging
+import tempfile
+import os
+from pathlib import Path
 from typing import Optional
 
-import anthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -12,63 +15,191 @@ from ..models import AppConfig
 logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-6"
+_AUTH_SENTINEL = "claude-code-auth"
 
 
 class ClaudeService:
+    # ------------------------------------------------------------------
+    # Auth helpers (DB stores sentinel, not actual token)
+    # ------------------------------------------------------------------
+
     async def get_token(self, db: AsyncSession) -> Optional[str]:
+        """Return sentinel string if authenticated, None otherwise."""
         result = await db.execute(
             select(AppConfig).where(AppConfig.key == "anthropic_api_key")
         )
         config = result.scalar_one_or_none()
-        if config:
-            token = config.value or ""
-            # Reject tokens that contain whitespace — those are chatbot responses, not tokens
-            if token and "\n" not in token and " " not in token and len(token) > 20:
-                return token
-            logger.warning("Invalid token in DB (whitespace or too short) — ignoring")
+        if config and config.value == _AUTH_SENTINEL:
+            return _AUTH_SENTINEL
         return None
 
-    def client(self, token: str) -> anthropic.Anthropic:
-        if token.startswith("sk-ant-"):
-            return anthropic.Anthropic(api_key=token)
-        return anthropic.Anthropic(auth_token=token)
+    def client(self, token: str):
+        """Not used in subprocess mode — kept for API compatibility."""
+        return token
 
-    async def get_client(self, db: AsyncSession) -> anthropic.Anthropic:
+    async def get_client(self, db: AsyncSession):
         token = await self.get_token(db)
         if not token:
-            raise RuntimeError("Anthropic API token not configured")
-        return self.client(token)
+            raise RuntimeError("Not authenticated with Claude Code")
+        return token
 
-    async def validate_token(self, token: str) -> bool:
+    async def validate_token(self, creds: str) -> bool:
+        """Validate by running a minimal claude command."""
+        if creds == _AUTH_SENTINEL:
+            return True
+        # For file-based credentials, verify by running claude
         try:
-            c = self.client(token)
-            c.messages.create(
-                model=MODEL,
-                max_tokens=10,
-                messages=[{"role": "user", "content": "ping"}],
+            proc = await asyncio.create_subprocess_exec(
+                "claude", "--print", "-p", "Reply with just the word: ok",
+                "--model", MODEL,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            return True
-        except anthropic.AuthenticationError:
-            return False
+            _, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            return proc.returncode == 0
         except Exception as e:
-            logger.warning("Token validation error (treating as valid): %s", e)
-            # OAuth session tokens may raise non-auth errors during validation
-            # but still be usable — accept them and let real API calls fail naturally
-            return True
+            logger.warning("validate_token failed: %s", e)
+            return False
 
-    async def extract_curriculum(
+    # ------------------------------------------------------------------
+    # Claude CLI subprocess runner
+    # ------------------------------------------------------------------
+
+    async def _run(
         self,
-        client: anthropic.Anthropic,
-        files_content: list[dict],
-    ) -> dict:
-        """
-        files_content: list of {"filename": str, "content": str | bytes, "is_image": bool}
-        Returns: {concepts: [{name, content}], problems: [{name, statement, answer}], edges: [{from, to}]}
-        """
+        prompt: str,
+        system: Optional[str] = None,
+        image_bytes: Optional[bytes] = None,
+        timeout: int = 180,
+    ) -> str:
+        """Run claude CLI and return the text response."""
+
+        if image_bytes:
+            return await self._run_with_image(prompt, system, image_bytes, timeout)
+        return await self._run_text(prompt, system, timeout)
+
+    async def _run_text(self, prompt: str, system: Optional[str], timeout: int) -> str:
+        cmd = [
+            "claude", "--print",
+            "--output-format", "text",
+            "--model", MODEL,
+        ]
+        if system:
+            cmd += ["--system", system]
+        cmd += ["-p", prompt]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        if proc.returncode != 0:
+            raise RuntimeError(f"claude CLI error: {stderr.decode().strip()[:500]}")
+        return stdout.decode().strip()
+
+    async def _run_with_image(
+        self,
+        prompt: str,
+        system: Optional[str],
+        image_bytes: bytes,
+        timeout: int,
+    ) -> str:
+        """Run claude with an image via temp file + --image flag, or stream-json fallback."""
+
+        # Write image to temp file
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+            f.write(image_bytes)
+            tmp_path = f.name
+
+        try:
+            # Try --image flag (available in some Claude Code versions)
+            cmd = [
+                "claude", "--print",
+                "--output-format", "text",
+                "--model", MODEL,
+                "--image", tmp_path,
+            ]
+            if system:
+                cmd += ["--system", system]
+            cmd += ["-p", prompt]
+
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+
+            if proc.returncode == 0:
+                return stdout.decode().strip()
+
+            # Fallback: stream-json with base64 image
+            logger.info("--image flag failed, trying stream-json fallback")
+            return await self._run_stream_json_image(prompt, system, image_bytes, timeout)
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    async def _run_stream_json_image(
+        self,
+        prompt: str,
+        system: Optional[str],
+        image_bytes: bytes,
+        timeout: int,
+    ) -> str:
+        b64 = base64.b64encode(image_bytes).decode()
+        msg = {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": b64,
+                    },
+                },
+                {"type": "text", "text": prompt},
+            ],
+        }
+        stdin_data = (json.dumps(msg) + "\n").encode()
+
+        cmd = [
+            "claude", "--print",
+            "--output-format", "text",
+            "--input-format", "stream-json",
+            "--model", MODEL,
+        ]
+        if system:
+            cmd += ["--system", system]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(input=stdin_data), timeout=timeout
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(f"claude stream-json error: {stderr.decode().strip()[:500]}")
+        return stdout.decode().strip()
+
+    # ------------------------------------------------------------------
+    # High-level API methods (no client parameter needed)
+    # ------------------------------------------------------------------
+
+    async def extract_curriculum(self, _client, files_content: list[dict]) -> dict:
         file_texts = []
         for f in files_content:
             if f.get("is_image"):
-                # Skip images in the text prompt (handled separately if needed)
                 file_texts.append(f"[Image file: {f['filename']}]")
             else:
                 content = f.get("content", "")
@@ -102,14 +233,8 @@ Rules:
 - edges represent prerequisite relationships (from=prerequisite, to=dependent concept)
 - Return ONLY the JSON, no markdown fences or extra text
 """
+        raw = await self._run(prompt, timeout=120)
 
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        raw = response.content[0].text.strip()
         # Strip markdown fences if present
         if raw.startswith("```"):
             lines = raw.split("\n")
@@ -118,7 +243,7 @@ Rules:
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse Claude curriculum response: %s\nRaw: %s", e, raw[:500])
+            logger.error("Failed to parse curriculum response: %s\nRaw: %s", e, raw[:500])
             data = {"concepts": [], "problems": [], "edges": []}
 
         return {
@@ -129,32 +254,15 @@ Rules:
 
     async def evaluate_answer(
         self,
-        client: anthropic.Anthropic,
+        _client,
         problem: dict,
         canvas_png_bytes: bytes,
     ) -> dict:
-        """
-        Evaluate a handwritten answer from a canvas PNG.
-        Returns: {feedback: str, score: str, extracted_text: str}
-        """
-        image_b64 = base64.standard_b64encode(canvas_png_bytes).decode()
-
         problem_name = problem.get("name", "")
         problem_statement = problem.get("statement", "")
         expected_answer = problem.get("answer", "")
 
-        prompt_parts = [
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": "image/png",
-                    "data": image_b64,
-                },
-            },
-            {
-                "type": "text",
-                "text": f"""You are a helpful tutor evaluating a student's handwritten answer.
+        prompt = f"""You are a helpful tutor evaluating a student's handwritten answer.
 
 Problem: {problem_name}
 Statement: {problem_statement}
@@ -172,17 +280,10 @@ Return a JSON object with exactly this structure:
   "feedback": "detailed, encouraging feedback explaining what was right and what could be improved"
 }}
 
-Return ONLY the JSON, no markdown fences or extra text.""",
-            },
-        ]
+Return ONLY the JSON, no markdown fences or extra text."""
 
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt_parts}],
-        )
+        raw = await self._run(prompt, image_bytes=canvas_png_bytes, timeout=60)
 
-        raw = response.content[0].text.strip()
         if raw.startswith("```"):
             lines = raw.split("\n")
             raw = "\n".join(lines[1:-1]) if lines[-1].startswith("```") else "\n".join(lines[1:])
@@ -190,14 +291,13 @@ Return ONLY the JSON, no markdown fences or extra text.""",
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as e:
-            logger.error("Failed to parse Claude evaluate response: %s\nRaw: %s", e, raw[:500])
+            logger.error("Failed to parse evaluate response: %s\nRaw: %s", e, raw[:500])
             data = {
-                "extracted_text": "",
+                "extracted_text": raw[:200],
                 "score": "incorrect",
-                "feedback": "Could not evaluate answer. Please try again.",
+                "feedback": "Could not evaluate answer automatically. Please review manually.",
             }
 
-        # Normalize score
         score = data.get("score", "incorrect").lower()
         if score not in ("correct", "partial", "incorrect"):
             score = "incorrect"
@@ -210,18 +310,13 @@ Return ONLY the JSON, no markdown fences or extra text.""",
 
     async def chat(
         self,
-        client: anthropic.Anthropic,
+        _client,
         subject_context: str,
         history: list[dict],
         message: str,
         canvas_png_bytes: Optional[bytes] = None,
     ) -> str:
-        """
-        General tutoring chat with optional canvas image.
-        history: list of {"role": "user"|"assistant", "content": str}
-        Returns: assistant response string
-        """
-        system_prompt = f"""You are an expert tutor helping a student learn.
+        system = f"""You are an expert tutor helping a student learn.
 You are knowledgeable, encouraging, and adapt your explanations to the student's level.
 Always respond in the same language the student uses.
 
@@ -234,36 +329,20 @@ Guidelines:
 - Encourage the student when they're struggling
 - Point out what they did correctly before addressing mistakes
 """
+        # Build conversation history as context prefix
+        history_text = ""
+        for msg in history[-10:]:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            history_text += f"{role}: {msg['content']}\n"
 
-        messages = list(history)
+        full_prompt = f"{history_text}User: {message}\nAssistant:"
 
-        # Build current user message
-        if canvas_png_bytes:
-            image_b64 = base64.standard_b64encode(canvas_png_bytes).decode()
-            user_content = [
-                {
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/png",
-                        "data": image_b64,
-                    },
-                },
-                {"type": "text", "text": message},
-            ]
-        else:
-            user_content = message
-
-        messages.append({"role": "user", "content": user_content})
-
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=2048,
-            system=system_prompt,
-            messages=messages,
+        return await self._run(
+            full_prompt,
+            system=system,
+            image_bytes=canvas_png_bytes,
+            timeout=60,
         )
-
-        return response.content[0].text
 
 
 claude_service = ClaudeService()

@@ -65,9 +65,15 @@ def _extract_tokens_from_dict(data: dict) -> list[str]:
     return found
 
 
+_SENTINEL = "claude-code-auth"
+
+
 async def _find_stored_credentials() -> Optional[str]:
     """
-    Find the Claude OAuth token by reading credential files.
+    Check if Claude Code credential files exist and contain OAuth data.
+    Returns a sentinel string (not the actual token) because the OAuth
+    accessToken is for claude.ai, not the Anthropic API — actual API
+    calls go through the Claude Code CLI subprocess.
 
     NOTE: We do NOT run CLI commands like 'claude auth token' or
     'claude config get api_key'. These are interpreted by Claude Code's
@@ -102,16 +108,16 @@ async def _find_stored_credentials() -> Optional[str]:
             logger.info("[claude-auth] Scanning %s → top-level keys: %s", path.name, list(data.keys())[:15])
             tokens = _extract_tokens_from_dict(data)
             if tokens:
-                logger.info("[claude-auth] Found %d candidate token(s) in %s", len(tokens), path.name)
-                return tokens[0]
+                logger.info("[claude-auth] Found Claude credentials in %s — returning auth sentinel", path.name)
+                return _SENTINEL  # Actual API calls use claude CLI subprocess
         except Exception as exc:
             logger.debug("[claude-auth] Could not read %s: %s", path, exc)
 
-    # Last resort: environment variable
+    # Last resort: environment variable (real Anthropic API key)
     env_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if _is_real_token(env_key):
         logger.info("[claude-auth] Using ANTHROPIC_API_KEY env var")
-        return env_key
+        return _SENTINEL
 
     logger.warning("[claude-auth] No credential found in any file. Contents of %s:", claude_home)
     try:
@@ -124,9 +130,6 @@ async def _find_stored_credentials() -> Optional[str]:
 
 
 async def _store_token(db: AsyncSession, token: str) -> None:
-    if not _is_real_token(token):
-        logger.error("[claude-auth] Refusing to store invalid token (whitespace/too short): %r", token[:80])
-        return
     result = await db.execute(select(AppConfig).where(AppConfig.key == "anthropic_api_key"))
     config = result.scalar_one_or_none()
     if config:
@@ -135,7 +138,7 @@ async def _store_token(db: AsyncSession, token: str) -> None:
         config = AppConfig(key="anthropic_api_key", value=token)
         db.add(config)
     await db.commit()
-    logger.info("[claude-auth] Token stored in DB (len=%d)", len(token))
+    logger.info("[claude-auth] Auth sentinel stored in DB")
 
 
 # ---------------------------------------------------------------------------
