@@ -84,14 +84,15 @@ async def _find_stored_credentials() -> Optional[str]:
     """
     claude_home = _claude_home()
 
-    # Candidate file list (order matters — try most specific first)
+    # Candidate file list (order matters — try most specific first).
+    # Running as claudeuser so /root paths are inaccessible — omit them.
+    home = Path(os.environ.get("HOME", _CLAUDEUSER_HOME))
     candidates: list[Path] = [
         claude_home / ".credentials.json",
         claude_home / "credentials.json",
         claude_home / "config.json",
         claude_home / "settings.json",
-        Path(os.environ.get("HOME", "/root")) / ".config" / "anthropic" / "credentials.json",
-        Path("/root/.config/anthropic/credentials.json"),
+        home / ".config" / "anthropic" / "credentials.json",
     ]
 
     # Also glob all JSON files in ~/.claude/ (including hidden ones)
@@ -103,7 +104,7 @@ async def _find_stored_credentials() -> Optional[str]:
 
     seen: set[Path] = set()
     for path in candidates:
-        if path in seen or not path.exists():
+        if path in seen:
             continue
         seen.add(path)
         try:
