@@ -6,9 +6,6 @@ import re
 from pathlib import Path
 from typing import Optional
 
-# Matches any Anthropic-style token: sk-ant-* or claude-* bearer tokens (ASCII, no whitespace)
-_TOKEN_RE = re.compile(r'sk-ant-[A-Za-z0-9_\-]+|[A-Za-z0-9_\-]{40,}')
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,85 +31,102 @@ def _claude_home() -> Path:
     return Path(os.environ.get("HOME", "/root")) / ".claude"
 
 
+def _is_real_token(val: object) -> bool:
+    """A real token is a single-word string with no whitespace, length > 20."""
+    if not isinstance(val, str):
+        return False
+    val = val.strip()
+    return len(val) > 20 and "\n" not in val and " " not in val and "\t" not in val
+
+
+def _extract_tokens_from_dict(data: dict) -> list[str]:
+    """Recursively extract all string values that look like real tokens."""
+    token_fields = {
+        "accessToken", "access_token", "apiKey", "api_key",
+        "ANTHROPIC_API_KEY", "token", "oauthToken", "sessionToken",
+        "bearerToken", "authToken",
+    }
+    found = []
+
+    def _walk(obj: object, depth: int = 0) -> None:
+        if depth > 5:
+            return
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if k in token_fields and _is_real_token(v):
+                    found.append(v.strip())
+                else:
+                    _walk(v, depth + 1)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item, depth + 1)
+
+    _walk(data)
+    return found
+
+
 async def _find_stored_credentials() -> Optional[str]:
-    """Try multiple strategies to find the Claude token after OAuth."""
+    """
+    Find the Claude OAuth token by reading credential files.
 
-    # Strategy 1: claude auth token (most direct — works after OAuth login)
-    for cmd in [
-        ["claude", "auth", "token"],
-        ["claude", "config", "get", "api_key"],
-    ]:
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            out, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
-            if proc.returncode == 0:
-                raw = out.decode("utf-8", errors="replace").strip()
-                logger.info("[claude-auth] %s raw output: %r", cmd[0], raw[:200])
-                # Extract just the token — output may include decorative text like
-                # "sk-ant-oat01-XXX — Session token for claude.ai"
-                m = re.search(r'sk-ant-[A-Za-z0-9_\-]+', raw)
-                if m:
-                    logger.info("[claude-auth] Extracted sk-ant- token via %s", cmd[0])
-                    return m.group()
-                # Fallback: take first ASCII-only word on first line
-                first_word = raw.split()[0] if raw.split() else ""
-                ascii_word = first_word.encode("ascii", errors="ignore").decode()
-                if ascii_word and len(ascii_word) > 20 and ascii_word not in ("null", "None", "undefined"):
-                    logger.info("[claude-auth] Using first-word token via %s", cmd[0])
-                    return ascii_word
-        except Exception:
-            pass
+    NOTE: We do NOT run CLI commands like 'claude auth token' or
+    'claude config get api_key'. These are interpreted by Claude Code's
+    AI and return chatbot responses instead of actual token values.
+    """
+    claude_home = _claude_home()
 
-    # Strategy 2: scan credential files (top-level and nested OAuth fields)
-    candidates = [
-        _claude_home() / ".credentials.json",
-        _claude_home() / "credentials.json",
-        _claude_home() / "config.json",
-        Path("/root/.config/anthropic/credentials.json"),
+    # Candidate file list (order matters — try most specific first)
+    candidates: list[Path] = [
+        claude_home / ".credentials.json",
+        claude_home / "credentials.json",
+        claude_home / "config.json",
+        claude_home / "settings.json",
         Path(os.environ.get("HOME", "/root")) / ".config" / "anthropic" / "credentials.json",
+        Path("/root/.config/anthropic/credentials.json"),
     ]
-    top_level_fields = ["api_key", "ANTHROPIC_API_KEY", "token", "access_token", "apiKey"]
-    nested_oauth_keys = ["oauth", "claudeAiOauth", "oauthAccount"]
 
+    # Also glob all JSON files in ~/.claude/ (including hidden ones)
+    try:
+        candidates += list(claude_home.glob("*.json"))
+        candidates += list(claude_home.glob(".*.json"))
+    except Exception:
+        pass
+
+    seen: set[Path] = set()
     for path in candidates:
-        if not path.exists():
+        if path in seen or not path.exists():
             continue
+        seen.add(path)
         try:
             data = json.loads(path.read_text())
-            logger.info("[claude-auth] Scanning %s, keys: %s", path, list(data.keys())[:10])
-            def _ascii_token(v: str) -> str:
-                return v.encode("ascii", errors="ignore").decode().strip()
+            logger.info("[claude-auth] Scanning %s → top-level keys: %s", path.name, list(data.keys())[:15])
+            tokens = _extract_tokens_from_dict(data)
+            if tokens:
+                logger.info("[claude-auth] Found %d candidate token(s) in %s", len(tokens), path.name)
+                return tokens[0]
+        except Exception as exc:
+            logger.debug("[claude-auth] Could not read %s: %s", path, exc)
 
-            # Top-level token fields
-            for field in top_level_fields:
-                val = _ascii_token(data.get(field, "") or "")
-                if val and len(val) > 10:
-                    return val
-            # Nested OAuth objects
-            for key in nested_oauth_keys:
-                obj = data.get(key, {})
-                if isinstance(obj, dict):
-                    for sub in ["accessToken", "token", "access_token"]:
-                        val = _ascii_token(obj.get(sub, "") or "")
-                        if val and len(val) > 10:
-                            logger.info("[claude-auth] Found token in %s.%s", key, sub)
-                            return val
-        except Exception:
-            pass
-
-    # Strategy 3: env var
+    # Last resort: environment variable
     env_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    if env_key and len(env_key) > 10:
+    if _is_real_token(env_key):
+        logger.info("[claude-auth] Using ANTHROPIC_API_KEY env var")
         return env_key
+
+    logger.warning("[claude-auth] No credential found in any file. Contents of %s:", claude_home)
+    try:
+        for p in claude_home.iterdir():
+            logger.warning("[claude-auth]   %s (%d bytes)", p.name, p.stat().st_size)
+    except Exception:
+        pass
 
     return None
 
 
 async def _store_token(db: AsyncSession, token: str) -> None:
+    if not _is_real_token(token):
+        logger.error("[claude-auth] Refusing to store invalid token (whitespace/too short): %r", token[:80])
+        return
     result = await db.execute(select(AppConfig).where(AppConfig.key == "anthropic_api_key"))
     config = result.scalar_one_or_none()
     if config:
@@ -121,6 +135,7 @@ async def _store_token(db: AsyncSession, token: str) -> None:
         config = AppConfig(key="anthropic_api_key", value=token)
         db.add(config)
     await db.commit()
+    logger.info("[claude-auth] Token stored in DB (len=%d)", len(token))
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +191,6 @@ async def get_status(db: AsyncSession = Depends(get_db)) -> AuthStatusResponse:
 
 @router.post("/start")
 async def start_login() -> dict:
-    """Start Claude OAuth login flow. Returns the URL the user should visit."""
     global _state
 
     if _state["status"] == "pending" and _state["url"]:
@@ -187,7 +201,6 @@ async def start_login() -> dict:
     _state = {"status": "starting", "url": None, "proc": None}
     asyncio.create_task(_run_oauth_flow())
 
-    # Wait up to 20 s for the URL to appear
     for _ in range(40):
         await asyncio.sleep(0.5)
         if _state["url"] or _state["status"] in ("complete", "error"):
@@ -202,7 +215,6 @@ class CodePayload(BaseModel):
 
 @router.post("/code")
 async def submit_code(payload: CodePayload) -> dict:
-    """Submit the authentication code shown in the browser back to the claude process."""
     global _state
     proc = _state.get("proc")
     if proc is None or proc.stdin is None:
@@ -218,7 +230,6 @@ async def submit_code(payload: CodePayload) -> dict:
 
 @router.get("/poll")
 async def poll_login(db: AsyncSession = Depends(get_db)) -> dict:
-    """Poll whether OAuth completed and credentials are stored."""
     global _state
 
     creds = await _find_stored_credentials()

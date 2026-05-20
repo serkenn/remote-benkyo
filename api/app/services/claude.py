@@ -21,17 +21,17 @@ class ClaudeService:
         )
         config = result.scalar_one_or_none()
         if config:
-            return config.value
+            token = config.value or ""
+            # Reject tokens that contain whitespace — those are chatbot responses, not tokens
+            if token and "\n" not in token and " " not in token and len(token) > 20:
+                return token
+            logger.warning("Invalid token in DB (whitespace or too short) — ignoring")
         return None
 
     def client(self, token: str) -> anthropic.Anthropic:
-        # Strip non-ASCII characters (em dash etc.) that break HTTP headers
-        import re as _re
-        m = _re.search(r'sk-ant-[A-Za-z0-9_\-]+', token)
-        clean = m.group() if m else token.encode("ascii", errors="ignore").decode().strip()
-        if clean.startswith("sk-ant-"):
-            return anthropic.Anthropic(api_key=clean)
-        return anthropic.Anthropic(auth_token=clean)
+        if token.startswith("sk-ant-"):
+            return anthropic.Anthropic(api_key=token)
+        return anthropic.Anthropic(auth_token=token)
 
     async def get_client(self, db: AsyncSession) -> anthropic.Anthropic:
         token = await self.get_token(db)
