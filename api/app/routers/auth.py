@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import pwd
 import re
 from pathlib import Path
 from typing import Optional
@@ -29,23 +28,12 @@ _state: dict = {"status": "idle", "url": None, "proc": None}
 # ---------------------------------------------------------------------------
 
 def _claude_home() -> Path:
-    try:
-        return Path(pwd.getpwnam("claudeuser").pw_dir) / ".claude"
-    except KeyError:
-        return Path(os.environ.get("HOME", "/root")) / ".claude"
-
-
-def _make_claudeuser_preexec():
-    try:
-        user = pwd.getpwnam("claudeuser")
-        uid, gid, home = user.pw_uid, user.pw_gid, user.pw_dir
-        def fn():
-            os.setgid(gid)
-            os.setuid(uid)
-            os.environ["HOME"] = home
-        return fn
-    except KeyError:
-        return None
+    # When running as claudeuser (via entrypoint.sh su), HOME is set correctly.
+    # Fall back to /home/claudeuser if HOME is still /root for some reason.
+    home = os.environ.get("HOME", "")
+    if home and home != "/root":
+        return Path(home) / ".claude"
+    return Path("/home/claudeuser") / ".claude"
 
 
 def _is_real_token(val: object) -> bool:
@@ -167,7 +155,6 @@ async def _run_oauth_flow() -> None:
     env = {**os.environ, "BROWSER": "none", "ANTHROPIC_NO_BROWSER": "1"}
     url_re = re.compile(r"https://\S+")
 
-    preexec = _make_claudeuser_preexec()
     for cmd in [["claude", "auth", "login"], ["claude", "login"]]:
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -176,7 +163,6 @@ async def _run_oauth_flow() -> None:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 env=env,
-                preexec_fn=preexec,
             )
             _state["proc"] = proc
 
