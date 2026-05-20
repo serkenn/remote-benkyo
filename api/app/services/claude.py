@@ -4,6 +4,7 @@ import json
 import logging
 import tempfile
 import os
+import pwd
 from pathlib import Path
 from typing import Optional
 
@@ -16,6 +17,20 @@ logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-6"
 _AUTH_SENTINEL = "claude-code-auth"
+
+
+def _make_claudeuser_preexec():
+    """Return a preexec_fn that switches to claudeuser, or None if not found."""
+    try:
+        user = pwd.getpwnam("claudeuser")
+        uid, gid, home = user.pw_uid, user.pw_gid, user.pw_dir
+        def fn():
+            os.setgid(gid)
+            os.setuid(uid)
+            os.environ["HOME"] = home
+        return fn
+    except KeyError:
+        return None
 
 
 class ClaudeService:
@@ -46,6 +61,7 @@ class ClaudeService:
     async def validate_token(self, creds: str) -> bool:
         """Validate by running a minimal claude command."""
         try:
+            preexec = _make_claudeuser_preexec()
             proc = await asyncio.create_subprocess_exec(
                 "claude",
                 "--dangerously-skip-permissions",
@@ -55,6 +71,7 @@ class ClaudeService:
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                preexec_fn=preexec,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=45)
             ok = proc.returncode == 0
@@ -99,11 +116,13 @@ class ClaudeService:
         cmd += ["-p", prompt]
 
         logger.debug("Running claude text: model=%s prompt_len=%d", MODEL, len(prompt))
+        preexec = _make_claudeuser_preexec()
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=preexec,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         if proc.returncode != 0:
@@ -139,11 +158,13 @@ class ClaudeService:
                 cmd += ["--system", system]
             cmd += ["-p", prompt]
 
+            preexec = _make_claudeuser_preexec()
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                preexec_fn=preexec,
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
@@ -193,11 +214,13 @@ class ClaudeService:
         if system:
             cmd += ["--system", system]
 
+        preexec = _make_claudeuser_preexec()
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=preexec,
         )
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(input=stdin_data), timeout=timeout
