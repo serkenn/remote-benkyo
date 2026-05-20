@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 
 MODEL = "claude-sonnet-4-6"
 _AUTH_SENTINEL = "claude-code-auth"
+_CLAUDE_HOME = "/home/claudeuser"
+
+
+def _claude_env() -> dict:
+    """Subprocess env with HOME forced to claudeuser's home directory.
+
+    su without -l leaves HOME as root's; this ensures claude always finds
+    its credentials in /home/claudeuser/.claude/ regardless of how the
+    server process was started.
+    """
+    return {**os.environ, "HOME": _CLAUDE_HOME}
 
 
 class ClaudeService:
@@ -55,13 +66,19 @@ class ClaudeService:
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_claude_env(),
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=45)
             ok = proc.returncode == 0
             if ok:
                 logger.info("[claude-auth] validate_token OK: %r", stdout.decode().strip()[:50])
             else:
-                logger.warning("[claude-auth] validate_token failed: %s", stderr.decode().strip()[:200])
+                logger.warning(
+                    "[claude-auth] validate_token failed rc=%d stderr=%r stdout=%r",
+                    proc.returncode,
+                    stderr.decode().strip()[:300],
+                    stdout.decode().strip()[:300],
+                )
             return ok
         except Exception as e:
             logger.warning("validate_token failed: %s", e)
@@ -104,12 +121,15 @@ class ClaudeService:
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_claude_env(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         if proc.returncode != 0:
             err = stderr.decode().strip()
-            logger.error("claude CLI error (rc=%d): %s", proc.returncode, err[:500])
-            raise RuntimeError(f"claude CLI error: {err[:500]}")
+            out = stdout.decode().strip()
+            detail = err or out or "(no output)"
+            logger.error("claude CLI error (rc=%d) stderr=%r stdout=%r", proc.returncode, err[:300], out[:300])
+            raise RuntimeError(f"claude CLI error: {detail[:500]}")
         return stdout.decode().strip()
 
     async def _run_with_image(
@@ -144,6 +164,7 @@ class ClaudeService:
                 stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=_claude_env(),
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
@@ -198,12 +219,15 @@ class ClaudeService:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=_claude_env(),
         )
         stdout, stderr = await asyncio.wait_for(
             proc.communicate(input=stdin_data), timeout=timeout
         )
         if proc.returncode != 0:
-            raise RuntimeError(f"claude stream-json error: {stderr.decode().strip()[:500]}")
+            err = stderr.decode().strip()
+            out = stdout.decode().strip()
+            raise RuntimeError(f"claude stream-json error: {(err or out or '(no output)')[:500]}")
         return stdout.decode().strip()
 
     # ------------------------------------------------------------------

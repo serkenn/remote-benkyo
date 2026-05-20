@@ -27,13 +27,11 @@ _state: dict = {"status": "idle", "url": None, "proc": None}
 # Credential discovery
 # ---------------------------------------------------------------------------
 
+_CLAUDEUSER_HOME = "/home/claudeuser"
+
+
 def _claude_home() -> Path:
-    # When running as claudeuser (via entrypoint.sh su), HOME is set correctly.
-    # Fall back to /home/claudeuser if HOME is still /root for some reason.
-    home = os.environ.get("HOME", "")
-    if home and home != "/root":
-        return Path(home) / ".claude"
-    return Path("/home/claudeuser") / ".claude"
+    return Path(_CLAUDEUSER_HOME) / ".claude"
 
 
 def _is_real_token(val: object) -> bool:
@@ -152,7 +150,7 @@ async def _store_token(db: AsyncSession, token: str) -> None:
 
 async def _run_oauth_flow() -> None:
     global _state
-    env = {**os.environ, "BROWSER": "none", "ANTHROPIC_NO_BROWSER": "1"}
+    env = {**os.environ, "BROWSER": "none", "ANTHROPIC_NO_BROWSER": "1", "HOME": _CLAUDEUSER_HOME}
     url_re = re.compile(r"https://\S+")
 
     for cmd in [["claude", "auth", "login"], ["claude", "login"]]:
