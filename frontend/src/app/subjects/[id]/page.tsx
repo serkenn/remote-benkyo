@@ -61,8 +61,19 @@ export default function SubjectDetailPage() {
       router.replace('/auth')
       return
     }
-    loadData()
-  }, [router, loadData])
+    loadData().then(async () => {
+      // ページ読み込み時に実行中ジョブがあれば自動的にポーリング再開
+      try {
+        const status = await api.study.initStatus(id)
+        if (status.status === 'running') {
+          setInitializing(true)
+          setInitLogs(status.logs ?? [])
+          pollUntilDone()
+        }
+      } catch { /* ignore */ }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, loadData, id])
 
   async function handleFilesUpload(fileList: FileList | File[]) {
     const files = Array.from(fileList)
@@ -115,13 +126,9 @@ export default function SubjectDetailPage() {
     }
   }
 
-  async function handleInit() {
-    setInitializing(true)
-    setInitLogs([])
-    setError(null)
+  async function pollUntilDone() {
     let networkErrors = 0
     try {
-      await api.study.init(id, instructions || undefined)
       while (true) {
         await new Promise(r => setTimeout(r, 2000))
         let status
@@ -129,14 +136,11 @@ export default function SubjectDetailPage() {
           status = await api.study.initStatus(id)
           networkErrors = 0
         } catch {
-          // 一時的なネットワークエラーは最大5回まで無視して継続
           networkErrors++
-          if (networkErrors >= 5) throw new Error('ネットワーク接続が切断されました')
+          if (networkErrors >= 30) throw new Error('ネットワーク接続が切断されました')
           continue
         }
-        if (status.logs && status.logs.length > 0) {
-          setInitLogs(status.logs)
-        }
+        if (status.logs && status.logs.length > 0) setInitLogs(status.logs)
         if (status.status === 'done') {
           setInitResult({ concepts: status.concepts ?? 0, problems: status.problems ?? 0 })
           const updated = await api.subjects.get(id)
@@ -154,12 +158,24 @@ export default function SubjectDetailPage() {
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '初期化に失敗しました'
-      if (msg.includes('401')) {
-        router.replace('/auth')
-        return
-      }
+      if (msg.includes('401')) { router.replace('/auth'); return }
       setError(`初期化に失敗しました: ${msg}`)
     } finally {
+      setInitializing(false)
+    }
+  }
+
+  async function handleInit() {
+    setInitializing(true)
+    setInitLogs([])
+    setError(null)
+    try {
+      await api.study.init(id, instructions || undefined)
+      await pollUntilDone()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '初期化に失敗しました'
+      if (msg.includes('401')) { router.replace('/auth'); return }
+      setError(`初期化に失敗しました: ${msg}`)
       setInitializing(false)
     }
   }

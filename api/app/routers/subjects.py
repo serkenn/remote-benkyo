@@ -280,38 +280,45 @@ async def _run_init_job(subject_id: str, instructions: Optional[str]) -> None:
                     except Exception as e:
                         logger.error("Failed to read file %s: %s", path, e)
 
-            # OCR phase — run in executor to avoid blocking the event loop
+            # OCR phase — only OCR up to 4 representative PDFs (first page each);
+            # remaining scanned PDFs are listed by filename only to keep context small.
             if ocr_needed:
                 import fitz as _fitz
                 import pytesseract
                 from PIL import Image
                 import io as _io
 
-                def _ocr_doc(filename: str, doc) -> str:
-                    parts = []
-                    for page in doc[:8]:
-                        mat = _fitz.Matrix(2.0, 2.0)
-                        pix = page.get_pixmap(matrix=mat)
-                        img = Image.open(_io.BytesIO(pix.tobytes("png")))
-                        t = pytesseract.image_to_string(img, lang="jpn+eng")
-                        if t.strip():
-                            parts.append(t)
+                OCR_SAMPLE_LIMIT = 4
+
+                def _ocr_first_page(filename: str, doc) -> str:
+                    if len(doc) == 0:
+                        doc.close()
+                        return ""
+                    mat = _fitz.Matrix(2.0, 2.0)
+                    pix = doc[0].get_pixmap(matrix=mat)
+                    img = Image.open(_io.BytesIO(pix.tobytes("png")))
+                    text = pytesseract.image_to_string(img, lang="jpn+eng")
                     doc.close()
-                    return "\n".join(parts)
+                    return text.strip()
 
                 loop = asyncio.get_event_loop()
-                for i, (filename, doc) in enumerate(ocr_needed, 1):
-                    _set_log(
-                        subject_id,
-                        f"OCR処理中 ({i}/{len(ocr_needed)}): {filename}",
-                    )
-                    text = await loop.run_in_executor(None, _ocr_doc, filename, doc)
-                    if text.strip():
+                sample = ocr_needed[:OCR_SAMPLE_LIMIT]
+                skipped = ocr_needed[OCR_SAMPLE_LIMIT:]
+
+                for i, (filename, doc) in enumerate(sample, 1):
+                    _set_log(subject_id, f"OCR処理中 ({i}/{len(sample)}): {filename}")
+                    text = await loop.run_in_executor(None, _ocr_first_page, filename, doc)
+                    if text:
                         logger.info("OCR extracted %d chars from %s", len(text), filename)
                         files_content.append({"filename": filename, "content": text, "is_image": False})
                     else:
                         logger.warning("OCR found no text in %s", filename)
-                        files_content.append({"filename": filename, "content": f"[PDF: {filename} — text could not be extracted]", "is_image": False})
+                        files_content.append({"filename": filename, "content": f"[スキャンPDF: {filename}]", "is_image": False})
+
+                # Close skipped docs and add filename-only entries
+                for filename, doc in skipped:
+                    doc.close()
+                    files_content.append({"filename": filename, "content": f"[スキャンPDF: {filename} — 上記サンプルと同形式]", "is_image": False})
 
             if not files_content:
                 _init_jobs[subject_id] = {"status": "error", "error": "Could not read any uploaded files"}
