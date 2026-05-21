@@ -58,6 +58,18 @@ class InitResponse(BaseModel):
     problems: int
 
 
+class InitStartResponse(BaseModel):
+    status: str  # "started" | "already_running"
+
+
+class InitStatusResponse(BaseModel):
+    status: str  # "not_started" | "running" | "done" | "error"
+    concepts: Optional[int] = None
+    problems: Optional[int] = None
+    error: Optional[str] = None
+    logs: list[str] = []
+
+
 class GraphResponse(BaseModel):
     mermaid: str
 

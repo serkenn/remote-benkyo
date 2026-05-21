@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -8,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from ..database import get_db
+from ..database import get_db, AsyncSessionLocal
 from ..models import Subject as SubjectModel, UploadedFile
 from ..schemas import (
     Subject,
@@ -16,6 +17,8 @@ from ..schemas import (
     FileInfo,
     InitRequest,
     InitResponse,
+    InitStartResponse,
+    InitStatusResponse,
     GraphResponse,
     Problem,
     OkResponse,
@@ -26,6 +29,10 @@ from ..services.claude import claude_service, ClaudeNotAuthenticatedError
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/subjects", tags=["subjects"])
+
+# In-memory job state: subject_id -> {status, concepts, problems, error, logs}
+_init_jobs: dict[str, dict] = {}
+
 
 
 def _subject_to_schema(subject: SubjectModel, problem_count: int = 0, concept_count: int = 0) -> Subject:
@@ -183,140 +190,236 @@ async def list_files(
     ]
 
 
-@router.post("/{subject_id}/init", response_model=InitResponse)
+def _make_log_callback(subject_id: str):
+    """Returns a callback that appends text chunks to the job's rolling log (last 3 lines)."""
+    buf = ""
+
+    def on_chunk(delta: str):
+        nonlocal buf
+        buf += delta
+        # Split into lines and keep non-empty ones; rolling window of 3
+        lines = [ln.strip() for ln in buf.replace("\n", " ").split("  ") if ln.strip()]
+        if not lines:
+            return
+        # Build display lines from accumulated text by splitting at sentence boundaries
+        display = []
+        for ln in lines:
+            # Break long chunks into ~60-char display lines
+            while len(ln) > 60:
+                display.append(ln[:60])
+                ln = ln[60:]
+            if ln:
+                display.append(ln)
+        _init_jobs[subject_id]["logs"] = display[-3:]
+
+    return on_chunk
+
+
+def _set_log(subject_id: str, *lines: str) -> None:
+    """Update the rolling log display (up to 3 lines) for a running job."""
+    _init_jobs[subject_id]["logs"] = list(lines[-3:])
+
+
+async def _run_init_job(subject_id: str, instructions: Optional[str]) -> None:
+    """Background task that runs the long-running init and writes status to _init_jobs."""
+    _init_jobs[subject_id] = {"status": "running", "logs": []}
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(SubjectModel).where(SubjectModel.id == uuid.UUID(subject_id))
+            )
+            subject = result.scalar_one_or_none()
+            if not subject:
+                _init_jobs[subject_id] = {"status": "error", "error": "Subject not found"}
+                return
+
+            file_result = await db.execute(
+                select(UploadedFile)
+                .where(UploadedFile.subject_id == uuid.UUID(subject_id))
+                .order_by(UploadedFile.uploaded_at.asc())
+            )
+            files = file_result.scalars().all()
+            if not files:
+                _init_jobs[subject_id] = {"status": "error", "error": "No files uploaded for this subject"}
+                return
+
+            _set_log(subject_id, f"教材ファイルを確認中... ({len(files)} 件)")
+
+            files_content = []
+            ocr_needed = []
+            for f in files:
+                path = Path(f.storage_path)
+                if not path.exists():
+                    logger.warning("File not found: %s", path)
+                    continue
+                suffix = path.suffix.lower()
+                is_image = suffix in (".png", ".jpg", ".jpeg", ".gif", ".webp")
+                is_pdf = suffix == ".pdf"
+                if is_image:
+                    async with aiofiles.open(path, "rb") as fp:
+                        content = await fp.read()
+                    files_content.append({"filename": f.filename, "content": content, "is_image": True})
+                elif is_pdf:
+                    try:
+                        import fitz  # pymupdf
+                        doc = fitz.open(str(path))
+                        text = "\n".join(page.get_text() for page in doc)
+                        if not text.strip():
+                            ocr_needed.append((f.filename, doc))
+                        else:
+                            files_content.append({"filename": f.filename, "content": text, "is_image": False})
+                            doc.close()
+                    except Exception as e:
+                        logger.error("Failed to read PDF %s: %s", path, e)
+                        files_content.append({"filename": f.filename, "content": f"[PDF: {f.filename}]", "is_image": False})
+                else:
+                    try:
+                        async with aiofiles.open(path, "r", encoding="utf-8", errors="replace") as fp:
+                            content = await fp.read()
+                        files_content.append({"filename": f.filename, "content": content, "is_image": False})
+                    except Exception as e:
+                        logger.error("Failed to read file %s: %s", path, e)
+
+            # OCR phase — run in executor to avoid blocking the event loop
+            if ocr_needed:
+                import fitz as _fitz
+                import pytesseract
+                from PIL import Image
+                import io as _io
+
+                def _ocr_doc(filename: str, doc) -> str:
+                    parts = []
+                    for page in doc[:8]:
+                        mat = _fitz.Matrix(2.0, 2.0)
+                        pix = page.get_pixmap(matrix=mat)
+                        img = Image.open(_io.BytesIO(pix.tobytes("png")))
+                        t = pytesseract.image_to_string(img, lang="jpn+eng")
+                        if t.strip():
+                            parts.append(t)
+                    doc.close()
+                    return "\n".join(parts)
+
+                loop = asyncio.get_event_loop()
+                for i, (filename, doc) in enumerate(ocr_needed, 1):
+                    _set_log(
+                        subject_id,
+                        f"OCR処理中 ({i}/{len(ocr_needed)}): {filename}",
+                    )
+                    text = await loop.run_in_executor(None, _ocr_doc, filename, doc)
+                    if text.strip():
+                        logger.info("OCR extracted %d chars from %s", len(text), filename)
+                        files_content.append({"filename": filename, "content": text, "is_image": False})
+                    else:
+                        logger.warning("OCR found no text in %s", filename)
+                        files_content.append({"filename": filename, "content": f"[PDF: {filename} — text could not be extracted]", "is_image": False})
+
+            if not files_content:
+                _init_jobs[subject_id] = {"status": "error", "error": "Could not read any uploaded files"}
+                return
+
+
+            if instructions:
+                files_content.insert(0, {
+                    "filename": "instructions.txt",
+                    "content": f"Instructor notes:\n{instructions}",
+                    "is_image": False,
+                })
+
+            total_chars = sum(len(f.get("content", "") if not f.get("is_image") else "") for f in files_content)
+            _set_log(subject_id, f"Claudeに送信中... ({total_chars:,} 文字)")
+
+            try:
+                curriculum = await claude_service.extract_curriculum(
+                    None, files_content, on_chunk=_make_log_callback(subject_id)
+                )
+            except ClaudeNotAuthenticatedError:
+                await claude_service.clear_auth(db)
+                _init_jobs[subject_id] = {"status": "error", "error": "Claude認証が期限切れです — /auth で再ログインしてください", "auth_expired": True}
+                return
+
+            concepts = curriculum.get("concepts", [])
+            problems = curriculum.get("problems", [])
+            _set_log(subject_id, f"概念・問題を登録中... ({len(concepts)} 概念 / {len(problems)} 問題)")
+
+            concept_id_map: dict[str, str] = {}
+            for concept in concepts:
+                name = concept.get("name", "")
+                content = concept.get("content", "")
+                if not name:
+                    continue
+                try:
+                    concept_id = await benkyo_service.add_concept(subject_id, name, content)
+                    concept_id_map[name] = concept_id
+                except Exception as e:
+                    logger.error("Failed to add concept '%s': %s", name, e)
+
+            problem_ids = []
+            for problem in problems:
+                name = problem.get("name", "")
+                statement = problem.get("statement", "")
+                answer = problem.get("answer", None)
+                if not name or not statement:
+                    continue
+                try:
+                    problem_id = await benkyo_service.add_problem(subject_id, name, statement, answer)
+                    problem_ids.append(problem_id)
+                except Exception as e:
+                    logger.error("Failed to add problem '%s': %s", name, e)
+
+            if subject.benkyo_project_id:
+                project_id = subject.benkyo_project_id
+            else:
+                project_id = await benkyo_service.create_project(
+                    subject_id, subject.name, goal_ids=problem_ids or None
+                )
+
+            subject.benkyo_project_id = project_id
+            subject.initialized = True
+            await db.commit()
+
+        _init_jobs[subject_id] = {
+            "status": "done",
+            "concepts": len(concept_id_map),
+            "problems": len(problem_ids),
+        }
+    except asyncio.TimeoutError:
+        logger.error("Init job timed out for subject %s", subject_id)
+        _init_jobs[subject_id] = {"status": "error", "error": "Claudeの応答がタイムアウトしました（10分）。ファイル数を減らして再試行してください。"}
+    except Exception as e:
+        msg = str(e) or type(e).__name__
+        logger.error("Init job failed for subject %s: %s", subject_id, msg)
+        _init_jobs[subject_id] = {"status": "error", "error": msg}
+
+
+@router.post("/{subject_id}/init", response_model=InitStartResponse)
 async def init_subject(
     subject_id: str,
     body: InitRequest,
     db: AsyncSession = Depends(get_db),
-) -> InitResponse:
-    subject = await _get_subject_or_404(db, subject_id)
+) -> InitStartResponse:
+    await _get_subject_or_404(db, subject_id)
 
-    # Verify Claude Code auth
     if not await claude_service.get_token(db):
         raise HTTPException(status_code=401, detail="Not authenticated with Claude Code — please log in")
 
-    # Load all uploaded files
-    result = await db.execute(
-        select(UploadedFile)
-        .where(UploadedFile.subject_id == uuid.UUID(subject_id))
-        .order_by(UploadedFile.uploaded_at.asc())
-    )
-    files = result.scalars().all()
+    if _init_jobs.get(subject_id, {}).get("status") == "running":
+        return InitStartResponse(status="already_running")
 
-    if not files:
-        raise HTTPException(status_code=400, detail="No files uploaded for this subject")
+    asyncio.create_task(_run_init_job(subject_id, body.instructions))
+    return InitStartResponse(status="started")
 
-    # Read file contents
-    files_content = []
-    for f in files:
-        path = Path(f.storage_path)
-        if not path.exists():
-            logger.warning("File not found: %s", path)
-            continue
 
-        # Detect file type
-        suffix = path.suffix.lower()
-        is_image = suffix in (".png", ".jpg", ".jpeg", ".gif", ".webp")
-        is_pdf = suffix == ".pdf"
-
-        if is_image:
-            async with aiofiles.open(path, "rb") as fp:
-                content = await fp.read()
-            files_content.append({"filename": f.filename, "content": content, "is_image": True})
-        elif is_pdf:
-            try:
-                import pypdf
-                text_parts = []
-                reader = pypdf.PdfReader(str(path))
-                for page in reader.pages:
-                    text_parts.append(page.extract_text() or "")
-                content = "\n".join(text_parts)
-                if not content.strip():
-                    content = f"[PDF file: {f.filename} — text could not be extracted]"
-                files_content.append({"filename": f.filename, "content": content, "is_image": False})
-            except Exception as e:
-                logger.error("Failed to read PDF %s: %s", path, e)
-                files_content.append({
-                    "filename": f.filename,
-                    "content": f"[PDF file: {f.filename}]",
-                    "is_image": False,
-                })
-        else:
-            try:
-                async with aiofiles.open(path, "r", encoding="utf-8", errors="replace") as fp:
-                    content = await fp.read()
-                files_content.append({"filename": f.filename, "content": content, "is_image": False})
-            except Exception as e:
-                logger.error("Failed to read file %s: %s", path, e)
-
-    if not files_content:
-        raise HTTPException(status_code=400, detail="Could not read any uploaded files")
-
-    # Add instructions as a separate context if provided
-    if body.instructions:
-        files_content.insert(0, {
-            "filename": "instructions.txt",
-            "content": f"Instructor notes:\n{body.instructions}",
-            "is_image": False,
-        })
-
-    # Extract curriculum via Claude Code subprocess
-    try:
-        curriculum = await claude_service.extract_curriculum(None, files_content)
-    except ClaudeNotAuthenticatedError:
-        await claude_service.clear_auth(db)
-        raise HTTPException(status_code=401, detail="Claude認証が期限切れです — /auth で再ログインしてください")
-
-    concepts = curriculum.get("concepts", [])
-    problems = curriculum.get("problems", [])
-    edges = curriculum.get("edges", [])
-
-    # Add concepts to benkyo (global per DB)
-    concept_id_map: dict[str, str] = {}
-    for concept in concepts:
-        name = concept.get("name", "")
-        content = concept.get("content", "")
-        if not name:
-            continue
-        try:
-            concept_id = await benkyo_service.add_concept(subject_id, name, content)
-            concept_id_map[name] = concept_id
-        except Exception as e:
-            logger.error("Failed to add concept '%s': %s", name, e)
-
-    # Add problems to benkyo (global per DB) — must happen before project create
-    problem_ids = []
-    for problem in problems:
-        name = problem.get("name", "")
-        statement = problem.get("statement", "")
-        answer = problem.get("answer", None)
-        if not name or not statement:
-            continue
-        try:
-            problem_id = await benkyo_service.add_problem(
-                subject_id, name, statement, answer
-            )
-            problem_ids.append(problem_id)
-        except Exception as e:
-            logger.error("Failed to add problem '%s': %s", name, e)
-
-    # Create benkyo project with problems as goals (or reuse existing)
-    if subject.benkyo_project_id:
-        project_id = subject.benkyo_project_id
-    else:
-        project_id = await benkyo_service.create_project(
-            subject_id, subject.name, goal_ids=problem_ids or None
-        )
-
-    # Update subject in DB
-    subject.benkyo_project_id = project_id
-    subject.initialized = True
-    await db.commit()
-
-    return InitResponse(
-        ok=True,
-        concepts=len(concept_id_map),
-        problems=len(problem_ids),
+@router.get("/{subject_id}/init/status", response_model=InitStatusResponse)
+async def init_status(subject_id: str) -> InitStatusResponse:
+    job = _init_jobs.get(subject_id)
+    if not job:
+        return InitStatusResponse(status="not_started")
+    return InitStatusResponse(
+        status=job["status"],
+        concepts=job.get("concepts"),
+        problems=job.get("problems"),
+        error=job.get("error"),
+        logs=job.get("logs", []),
     )
 
 

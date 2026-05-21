@@ -5,7 +5,7 @@ import logging
 import tempfile
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -117,9 +117,6 @@ class ClaudeService:
         return await self._run_text(prompt, system, timeout)
 
     async def _run_text(self, prompt: str, system: Optional[str], timeout: int) -> str:
-        # -p is the non-interactive print flag; --print is an alias.
-        # --dangerously-skip-permissions prevents Claude Code from hanging in
-        # headless Docker environments waiting for permission confirmations.
         cmd = [
             "claude",
             "--dangerously-skip-permissions",
@@ -148,6 +145,59 @@ class ClaudeService:
                 raise ClaudeNotAuthenticatedError(detail)
             raise RuntimeError(f"claude CLI error: {detail[:500]}")
         return stdout.decode().strip()
+
+    async def _run_text_streaming(
+        self,
+        prompt: str,
+        system: Optional[str],
+        timeout: int,
+        on_chunk: Callable[[str], None],
+    ) -> str:
+        """Run claude in text mode, calling on_chunk as chunks arrive on stdout."""
+        cmd = [
+            "claude",
+            "--dangerously-skip-permissions",
+            "--output-format", "text",
+            "--model", MODEL,
+        ]
+        if system:
+            cmd += ["--system", system]
+        cmd += ["-p", prompt]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_claude_env(),
+        )
+
+        parts: list[str] = []
+
+        async def _read_stream():
+            while True:
+                chunk = await proc.stdout.read(512)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                parts.append(text)
+                if text.strip():
+                    on_chunk(text)
+
+        await asyncio.wait_for(_read_stream(), timeout=timeout)
+        stderr_data = await proc.stderr.read()
+        await proc.wait()
+
+        if proc.returncode != 0:
+            err = stderr_data.decode().strip()
+            out = "".join(parts).strip()
+            detail = err or out or "(no output)"
+            logger.error("claude CLI error (rc=%d) stderr=%r", proc.returncode, err[:300])
+            if "Not logged in" in detail or "Please run /login" in detail:
+                raise ClaudeNotAuthenticatedError(detail)
+            raise RuntimeError(f"claude CLI error: {detail[:500]}")
+
+        return "".join(parts).strip()
 
     async def _run_with_image(
         self,
@@ -254,11 +304,22 @@ class ClaudeService:
     # High-level API methods (no client parameter needed)
     # ------------------------------------------------------------------
 
-    async def extract_curriculum(self, _client, files_content: list[dict]) -> dict:
+    async def extract_curriculum(
+        self,
+        _client,
+        files_content: list[dict],
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> dict:
+        # Separate text and image content
         file_texts = []
+        image_bytes_list: list[bytes] = []
+
         for f in files_content:
             if f.get("is_image"):
-                file_texts.append(f"[Image file: {f['filename']}]")
+                content = f.get("content", b"")
+                if isinstance(content, bytes) and content:
+                    image_bytes_list.append(content)
+                file_texts.append(f"[Image: {f['filename']}]")
             else:
                 content = f.get("content", "")
                 if isinstance(content, bytes):
@@ -272,7 +333,9 @@ class ClaudeService:
 Study Materials:
 {combined}
 
-Return a JSON object with exactly this structure:
+First, write 2-3 sentences in Japanese describing what you found in the materials (subject area, structure, key themes). Start with「教材分析:」.
+
+Then output a JSON object with exactly this structure:
 {{
   "concepts": [
     {{"name": "concept name", "content": "brief description of the concept"}}
@@ -289,9 +352,19 @@ Rules:
 - Extract all key concepts/topics from the materials
 - Extract all exercises, problems, and practice questions
 - edges represent prerequisite relationships (from=prerequisite, to=dependent concept)
-- Return ONLY the JSON, no markdown fences or extra text
+- Output the JSON after the Japanese description, with no markdown fences
 """
-        raw = await self._run(prompt, timeout=300)
+        if image_bytes_list:
+            raw = await self._run_with_multiple_images(prompt, system=None, images=image_bytes_list, timeout=600, on_chunk=on_chunk)
+        elif on_chunk is not None:
+            raw = await self._run_text_streaming(prompt, system=None, timeout=600, on_chunk=on_chunk)
+        else:
+            raw = await self._run(prompt, timeout=600)
+
+        # Extract JSON — find the first '{' that starts the JSON block
+        brace_idx = raw.find("{")
+        if brace_idx > 0:
+            raw = raw[brace_idx:]
 
         # Strip markdown fences if present
         if raw.startswith("```"):
@@ -309,6 +382,88 @@ Rules:
             "problems": data.get("problems", []),
             "edges": data.get("edges", []),
         }
+
+    async def _run_with_multiple_images(
+        self,
+        prompt: str,
+        system: Optional[str],
+        images: list[bytes],
+        timeout: int,
+        on_chunk: Optional[Callable[[str], None]] = None,
+    ) -> str:
+        """Send prompt + multiple images via --input-format stream-json, output as text."""
+        content_blocks: list[dict] = []
+        for img_bytes in images:
+            b64 = base64.b64encode(img_bytes).decode()
+            content_blocks.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": "image/png", "data": b64},
+            })
+        content_blocks.append({"type": "text", "text": prompt})
+
+        msg = {"role": "user", "content": content_blocks}
+        stdin_data = (json.dumps(msg) + "\n").encode()
+
+        cmd = [
+            "claude",
+            "--dangerously-skip-permissions",
+            "--output-format", "text",
+            "--input-format", "stream-json",
+            "--model", MODEL,
+        ]
+        if system:
+            cmd += ["--system", system]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=_claude_env(),
+        )
+
+        if on_chunk is not None:
+            parts: list[str] = []
+
+            async def _write_stdin():
+                proc.stdin.write(stdin_data)
+                await proc.stdin.drain()
+                proc.stdin.close()
+
+            async def _read_stdout():
+                while True:
+                    chunk = await proc.stdout.read(512)
+                    if not chunk:
+                        break
+                    text = chunk.decode("utf-8", errors="replace")
+                    parts.append(text)
+                    if text.strip():
+                        on_chunk(text)
+
+            await asyncio.wait_for(
+                asyncio.gather(_write_stdin(), _read_stdout()),
+                timeout=timeout,
+            )
+            stderr_data = await proc.stderr.read()
+            await proc.wait()
+            if proc.returncode != 0:
+                err = stderr_data.decode().strip()
+                if "Not logged in" in err or "Please run /login" in err:
+                    raise ClaudeNotAuthenticatedError(err)
+                raise RuntimeError(f"claude CLI error: {err[:500]}")
+            return "".join(parts).strip()
+        else:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=stdin_data), timeout=timeout
+            )
+            if proc.returncode != 0:
+                err = stderr.decode().strip()
+                out = stdout.decode().strip()
+                detail = err or out or "(no output)"
+                if "Not logged in" in detail or "Please run /login" in detail:
+                    raise ClaudeNotAuthenticatedError(detail)
+                raise RuntimeError(f"claude CLI error: {detail[:500]}")
+            return stdout.decode().strip()
 
     async def evaluate_answer(
         self,

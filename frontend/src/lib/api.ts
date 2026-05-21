@@ -35,6 +35,15 @@ export type InitResult = {
   problems: number
 }
 
+export type InitStatus = {
+  status: 'not_started' | 'running' | 'done' | 'error'
+  concepts?: number
+  problems?: number
+  error?: string
+  auth_expired?: boolean
+  logs?: string[]
+}
+
 function authHeaders(): HeadersInit {
   const token = getToken()
   if (!token) return {}
@@ -116,12 +125,15 @@ export const api = {
   },
 
   study: {
-    async init(subjectId: string, instructions?: string): Promise<InitResult> {
+    async init(subjectId: string, instructions?: string): Promise<{ status: string }> {
       return request(`/api/subjects/${subjectId}/init`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instructions }),
       })
+    },
+    async initStatus(subjectId: string): Promise<InitStatus> {
+      return request(`/api/subjects/${subjectId}/init/status`)
     },
     async graph(subjectId: string): Promise<{ mermaid: string }> {
       return request(`/api/subjects/${subjectId}/graph`)

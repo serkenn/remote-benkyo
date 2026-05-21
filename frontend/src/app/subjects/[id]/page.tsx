@@ -27,6 +27,7 @@ export default function SubjectDetailPage() {
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null)
   const [initializing, setInitializing] = useState(false)
   const [initResult, setInitResult] = useState<{ concepts: number; problems: number } | null>(null)
+  const [initLogs, setInitLogs] = useState<string[]>([])
   const [instructions, setInstructions] = useState('')
   const [mermaidString, setMermaidString] = useState<string | null>(null)
   const [graphLoading, setGraphLoading] = useState(false)
@@ -116,12 +117,41 @@ export default function SubjectDetailPage() {
 
   async function handleInit() {
     setInitializing(true)
+    setInitLogs([])
     setError(null)
+    let networkErrors = 0
     try {
-      const result = await api.study.init(id, instructions || undefined)
-      setInitResult({ concepts: result.concepts, problems: result.problems })
-      const updated = await api.subjects.get(id)
-      setSubject(updated)
+      await api.study.init(id, instructions || undefined)
+      while (true) {
+        await new Promise(r => setTimeout(r, 2000))
+        let status
+        try {
+          status = await api.study.initStatus(id)
+          networkErrors = 0
+        } catch {
+          // 一時的なネットワークエラーは最大5回まで無視して継続
+          networkErrors++
+          if (networkErrors >= 5) throw new Error('ネットワーク接続が切断されました')
+          continue
+        }
+        if (status.logs && status.logs.length > 0) {
+          setInitLogs(status.logs)
+        }
+        if (status.status === 'done') {
+          setInitResult({ concepts: status.concepts ?? 0, problems: status.problems ?? 0 })
+          const updated = await api.subjects.get(id)
+          setSubject(updated)
+          break
+        } else if (status.status === 'error') {
+          const msg = status.error || '初期化に失敗しました'
+          if (msg.includes('401') || status.auth_expired) {
+            router.replace('/auth')
+            return
+          }
+          setError(`初期化に失敗しました: ${msg}`)
+          break
+        }
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : '初期化に失敗しました'
       if (msg.includes('401')) {
@@ -385,6 +415,20 @@ export default function SubjectDetailPage() {
                   <p className="text-xs text-slate-500">
                     ファイルをアップロードしてから分析を開始してください
                   </p>
+                )}
+
+                {initializing && (
+                  <div className="mt-3 rounded-lg bg-slate-900 border border-slate-700 px-3 py-2.5 font-mono text-xs text-slate-400 space-y-0.5 min-h-[60px]">
+                    {initLogs.length === 0 ? (
+                      <span className="text-slate-600 animate-pulse">Claudeが起動中...</span>
+                    ) : (
+                      initLogs.map((line, i) => (
+                        <div key={i} className={i === initLogs.length - 1 ? 'text-slate-300' : 'text-slate-500'}>
+                          <span className="text-slate-600 mr-1">&gt;</span>{line}
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
             </div>
