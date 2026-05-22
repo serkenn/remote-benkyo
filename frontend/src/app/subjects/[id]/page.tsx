@@ -310,7 +310,7 @@ export default function SubjectDetailPage() {
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
+                className={`border-2 border-dashed rounded-xl p-4 sm:p-8 text-center cursor-pointer transition-all
                   ${isDragging
                     ? 'border-indigo-500 bg-indigo-950/30'
                     : 'border-slate-700 hover:border-slate-600 hover:bg-slate-800/30'
@@ -338,7 +338,8 @@ export default function SubjectDetailPage() {
                   <div className="flex flex-col items-center gap-2">
                     <Upload className="w-8 h-8 text-slate-500" />
                     <p className="text-sm text-slate-300">
-                      ファイルをドラッグ＆ドロップ、またはクリックしてアップロード
+                      <span className="hidden sm:inline">ファイルをドラッグ＆ドロップ、またはクリックしてアップロード</span>
+                      <span className="sm:hidden">タップしてアップロード</span>
                     </p>
                     <p className="text-xs text-slate-500">PDF, 画像, テキストに対応</p>
                   </div>

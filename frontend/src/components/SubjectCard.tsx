@@ -61,7 +61,7 @@ export default function SubjectCard({ subject, onDelete }: SubjectCardProps) {
                         transition-all min-h-[32px]
                         ${confirmDelete
                           ? 'bg-red-600 text-white'
-                          : 'text-slate-500 hover:text-red-400 hover:bg-slate-700 opacity-0 group-hover:opacity-100'
+                          : 'text-slate-500 hover:text-red-400 hover:bg-slate-700 sm:opacity-0 sm:group-hover:opacity-100'
                         }`}
           >
             <Trash2 className="w-3.5 h-3.5" />

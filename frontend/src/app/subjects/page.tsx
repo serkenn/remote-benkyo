@@ -102,7 +102,7 @@ export default function SubjectsPage() {
                          hover:bg-slate-800 text-sm transition-colors min-h-[40px]"
             >
               <LogOut className="w-4 h-4" />
-              ログアウト
+              <span className="hidden sm:inline">ログアウト</span>
             </button>
           </div>
         </div>

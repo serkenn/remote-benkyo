@@ -256,7 +256,7 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 overflow-hidden">
+    <div className="flex flex-col h-dvh bg-slate-900 overflow-hidden">
       {/* Top bar */}
       <header className="flex-shrink-0 flex items-center justify-between px-4 py-3
                           border-b border-slate-800 bg-slate-900">
@@ -314,10 +314,20 @@ export default function SessionPage() {
       </div>
 
       {/* Canvas area */}
-      <div className="flex-1 px-4 py-2 min-h-0">
+      <div className="flex-1 px-4 py-2 min-h-0 relative">
         <div className="w-full h-full rounded-xl overflow-hidden border border-slate-700">
           <Canvas onExport={() => {}} onEditorReady={handleEditorReady} />
         </div>
+        {feedback && feedbackCollapsed && (
+          <button
+            onClick={() => setFeedbackCollapsed(false)}
+            className="absolute bottom-4 left-6 flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                       bg-slate-800 border border-slate-600 text-slate-300 text-xs shadow-lg z-10"
+          >
+            フィードバックを見る
+            <ChevronUp className="w-3 h-3" />
+          </button>
+        )}
       </div>
 
       {/* Toolbar */}
@@ -367,27 +377,36 @@ export default function SessionPage() {
         </div>
       </div>
 
-      {/* Feedback panel */}
-      {feedback && (
-        <div className="flex-shrink-0 px-4 pb-4 border-t border-slate-800 pt-3 bg-slate-900">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-              フィードバック
-            </span>
-            <button
-              onClick={() => setFeedbackCollapsed(c => !c)}
-              className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              {feedbackCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
+      {/* Feedback bottom sheet */}
+      {feedback && !feedbackCollapsed && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setFeedbackCollapsed(true)}
+          />
+          <div
+            className="relative bg-slate-900 border-t border-slate-700 rounded-t-2xl flex flex-col"
+            style={{ maxHeight: '70vh' }}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+              <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
+                フィードバック
+              </span>
+              <button
+                onClick={() => setFeedbackCollapsed(true)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              <FeedbackPanel
+                score={feedback.score}
+                feedback={feedback.feedback}
+                onNext={handleNextProblem}
+              />
+            </div>
           </div>
-          {!feedbackCollapsed && (
-            <FeedbackPanel
-              score={feedback.score}
-              feedback={feedback.feedback}
-              onNext={handleNextProblem}
-            />
-          )}
         </div>
       )}
 
